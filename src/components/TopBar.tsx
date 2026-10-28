@@ -95,67 +95,77 @@ function Toolbar() {
 
   return (
     <div className="toolbar">
-      <RepoPicker />
-      <span className="crumb-sep">›</span>
-      <BranchPicker />
-      <span className="spacer" />
-      <ToolButton
-        label="Undo"
-        title={lastUndo ? `Undo ${lastUndo.label}` : "Nothing to undo"}
-        disabled={disabled || !lastUndo}
-        onClick={() => st().undo()}
-        icon={<UndoIcon />}
-      />
-      <ToolButton
-        label="Redo"
-        title={lastRedo ? `Redo ${lastRedo.label}` : "Nothing to redo"}
-        disabled={disabled || !lastRedo}
-        onClick={() => st().redo()}
-        icon={<UndoIcon redo />}
-      />
-      <PullButton disabled={disabled} canPull={!!headRef?.upstream} branch={head.branch} />
-      <ToolButton
-        label="Push"
-        title={
-          head.branch
-            ? `Push ${head.branch}${headRef?.upstream ? ` to ${headRef.upstream}` : " and set its upstream"}`
-            : "HEAD is detached"
-        }
-        disabled={disabled || !head.branch}
-        onClick={() => head.branch && st().runAction({ kind: "push", branch: head.branch })}
-        icon={<PushIcon />}
-      />
-      <ToolButton
-        label="Branch"
-        title="Create a branch at HEAD"
-        disabled={disabled || !head.sha}
-        onClick={createBranch}
-        icon={<BranchIcon />}
-      />
-      <ToolButton
-        label="Stash"
-        title={
-          repo.work.dirty > 0
-            ? `Stash ${repo.work.dirty} changed file${repo.work.dirty === 1 ? "" : "s"}`
-            : "No local changes"
-        }
-        disabled={disabled || repo.work.dirty === 0}
-        onClick={() => st().runAction({ kind: "stash", message: null })}
-        icon={<StashIcon />}
-      />
-      <ToolButton
-        label="Pop"
-        title={
-          repo.work.stashes > 0
-            ? `Apply and drop the latest of ${repo.work.stashes} stash${repo.work.stashes === 1 ? "" : "es"}`
-            : "No stashes"
-        }
-        disabled={disabled || repo.work.stashes === 0}
-        onClick={() => st().runAction({ kind: "stashPop" })}
-        icon={<StashIcon pop />}
-      />
-      <span className="tool-divider" />
-      <ToolButton label="Terminal" title="Open a terminal in this repository" onClick={openTerminal} icon={<TerminalIcon />} />
+      <div className="tb-left">
+        <RepoPicker />
+        <span className="crumb-sep">›</span>
+        <BranchPicker />
+      </div>
+      <div className="tb-center">
+        <ToolButton
+          label="Undo"
+          title={lastUndo ? `Undo ${lastUndo.label}` : "Nothing to undo"}
+          disabled={disabled || !lastUndo}
+          onClick={() => st().undo()}
+          icon={<UndoIcon />}
+        />
+        <ToolButton
+          label="Redo"
+          title={lastRedo ? `Redo ${lastRedo.label}` : "Nothing to redo"}
+          disabled={disabled || !lastRedo}
+          onClick={() => st().redo()}
+          icon={<UndoIcon redo />}
+        />
+        <PullButton disabled={disabled} canPull={!!headRef?.upstream} branch={head.branch} />
+        <ToolButton
+          label="Push"
+          title={
+            head.branch
+              ? `Push ${head.branch}${headRef?.upstream ? ` to ${headRef.upstream}` : " and set its upstream"}`
+              : "HEAD is detached"
+          }
+          disabled={disabled || !head.branch}
+          onClick={() => head.branch && st().runAction({ kind: "push", branch: head.branch })}
+          icon={<PushIcon />}
+        />
+        <ToolButton
+          label="Branch"
+          title="Create a branch at HEAD"
+          disabled={disabled || !head.sha}
+          onClick={createBranch}
+          icon={<BranchIcon />}
+        />
+        <ToolButton
+          label="Stash"
+          title={
+            repo.work.dirty > 0
+              ? `Stash ${repo.work.dirty} changed file${repo.work.dirty === 1 ? "" : "s"}`
+              : "No local changes"
+          }
+          disabled={disabled || repo.work.dirty === 0}
+          onClick={() => st().runAction({ kind: "stash", message: null })}
+          icon={<StashIcon />}
+        />
+        <ToolButton
+          label="Pop"
+          title={
+            repo.work.stashes > 0
+              ? `Apply and drop the latest of ${repo.work.stashes} stash${repo.work.stashes === 1 ? "" : "es"}`
+              : "No stashes"
+          }
+          disabled={disabled || repo.work.stashes === 0}
+          onClick={() => st().runAction({ kind: "stashPop" })}
+          icon={<StashIcon pop />}
+        />
+      </div>
+      <div className="tb-right">
+        <span className="tool-divider" />
+        <ToolButton
+          label="Terminal"
+          title="Open a terminal in this repository"
+          onClick={openTerminal}
+          icon={<TerminalIcon />}
+        />
+      </div>
     </div>
   );
 }

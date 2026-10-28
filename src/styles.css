@@ -1616,10 +1616,13 @@ body.resizing * {
   color: var(--text);
 }
 
+/* Left: where you are. Centre: what you can do. Right: leaving the app. The
+   outer columns share the remaining width equally so the actions sit in the
+   true centre of the window. */
 .toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 2px;
   height: 52px;
   padding: 0 10px 0 16px;
   background: var(--bg-2);
@@ -1746,4 +1749,18 @@ body.resizing * {
 
 .popover-empty {
   padding: 6px 10px;
+}
+
+.tb-left,
+.tb-center,
+.tb-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tb-right {
+  justify-self: end;
+  align-self: stretch;
 }
