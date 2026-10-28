@@ -101,11 +101,17 @@ Requires Node 22 (`.nvmrc`; Vite 8 needs ≥ 20.19) and Rust (pinned in
 `rust-toolchain.toml`).
 
 ```sh
-pnpm install
-pnpm app                 # tauri dev
-pnpm app -- -- ~/code/some-repo   # open a repository on launch
-cargo test -p frk-core
+make install             # frontend dependencies
+make dev                 # tauri dev; REPO=~/code/some-repo opens it on launch
+make check               # rustfmt, clippy, tests, type check
+make dmg                 # release build → target/release/bundle/dmg/frk_<version>_<arch>.dmg
+make install-app         # release build copied into /Applications
 ```
+
+The app is signed ad hoc, which is enough to run a build made on the same
+Mac. A .dmg handed to someone else needs a Developer ID signature and
+notarization (`APPLE_*` environment variables, see Tauri's docs), or macOS
+will refuse to open it.
 
 ### Faster Rust rebuilds with blaze
 
