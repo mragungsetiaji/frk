@@ -54,7 +54,10 @@ fn main() -> frk_core::Result<()> {
         })
         .collect();
     let tips: Vec<String> = visible.iter().map(|r| r.sha.clone()).collect();
-    let mut g = graph::layout(graph::load_commits(&repo, &tips, 5000)?);
+    let mut g = graph::layout(
+        graph::load_commits(&repo, &tips, 5000)?,
+        head.sha.as_deref(),
+    );
     g.label(visible.iter().map(|r| (r.name.as_str(), r.sha.as_str())));
 
     let mut details = BTreeMap::new();
@@ -82,6 +85,7 @@ fn main() -> frk_core::Result<()> {
             "head": head,
             "target": target,
             "refs": refs_json,
+            "remotes": refs::remotes(&repo)?,
             "changes": changes,
             "baseline": false,
         },

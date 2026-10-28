@@ -35,11 +35,19 @@ export type RefChange =
     }
   | { kind: "removed"; name: string; sha: string };
 
+export interface Remote {
+  name: string;
+  url: string;
+  web: string | null;
+  host: "github" | "gitlab" | "bitbucket" | "other";
+}
+
 export interface RepoView {
   root: string;
   head: Head;
   target: string | null;
   refs: RefInfo[];
+  remotes: Remote[];
   changes: RefChange[];
   baseline: boolean;
 }
@@ -48,6 +56,8 @@ export interface Edge {
   from: number;
   to: number;
   color: number;
+  /** Part of HEAD's history; everything else is drawn dimmed. */
+  head: boolean;
 }
 
 export interface Row {
@@ -59,6 +69,7 @@ export interface Row {
   subject: string;
   lane: number;
   color: number;
+  onHead: boolean;
   top: Edge[];
   bottom: Edge[];
   refs: string[];
@@ -101,6 +112,29 @@ export interface CommitDetail {
   files: FileChange[];
 }
 
+/** Mirrors `frk_core::actions::Action`. */
+export type Action =
+  | { kind: "checkout"; branch: string }
+  | { kind: "checkoutRemote"; remoteBranch: string }
+  | { kind: "checkoutDetached"; sha: string }
+  | { kind: "createBranch"; name: string; at: string; checkout: boolean }
+  | { kind: "reset"; mode: "soft" | "mixed" | "hard"; to: string }
+  | { kind: "revert"; sha: string }
+  | { kind: "reword"; message: string }
+  | { kind: "pull"; branch: string }
+  | { kind: "push"; branch: string }
+  | { kind: "setUpstream"; branch: string; upstream: string }
+  | { kind: "rename"; from: string; to: string }
+  | { kind: "deleteLocal"; branch: string; force: boolean }
+  | { kind: "deleteRemote"; remoteBranch: string }
+  | { kind: "tag"; name: string; at: string; message: string | null }
+  | { kind: "createPatch"; sha: string; path: string };
+
+export interface ActionResult {
+  message: string;
+  repo: RepoView;
+}
+
 export const api = {
   openRepo: (path: string) => invoke<RepoView>("open_repo", { path }),
   refresh: () => invoke<RepoView>("refresh"),
@@ -111,6 +145,7 @@ export const api = {
   commitDetail: (sha: string) => invoke<CommitDetail>("commit_detail", { sha }),
   fileDiff: (sha: string, path: string, oldPath: string | null) =>
     invoke<string>("file_diff", { sha, path, oldPath }),
+  runAction: (action: Action) => invoke<ActionResult>("run_action", { action }),
   launchPath: () => invoke<string | null>("launch_path"),
   markSeen: (names?: string[]) => invoke<RefChange[]>("mark_seen", { names: names ?? null }),
 };

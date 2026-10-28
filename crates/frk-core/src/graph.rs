@@ -5,7 +5,7 @@
 //! frontend never holds more than a few pages of rows no matter how large the
 //! history is.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 
@@ -27,6 +27,9 @@ pub struct Edge {
     pub from: u16,
     pub to: u16,
     pub color: u16,
+    /// Part of HEAD's history. Everything else is drawn dimmed, so the branch
+    /// you are on stands out at a glance.
+    pub head: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,6 +44,8 @@ pub struct Row {
     /// Lane the commit's node sits in.
     pub lane: u16,
     pub color: u16,
+    /// Reachable from HEAD.
+    pub on_head: bool,
     /// Segments in the upper half of the row, from the top edge at lane `from`
     /// to the vertical centre at lane `to`. A lane passing straight through has
     /// `from == to`; a lane ending in this commit has `to == lane`.
@@ -118,6 +123,8 @@ struct Lane {
     /// The commit this lane is drawing a line down towards.
     expect: String,
     color: u16,
+    /// Whether a commit in HEAD's history opened (or joined) this lane.
+    head: bool,
 }
 
 /// Assigns every commit a lane and records the line segments around it.
@@ -134,13 +141,16 @@ struct Lane {
 /// in-flight branch visible as its own line instead of being folded into its
 /// neighbour. Lanes are never shifted sideways to close gaps; a freed slot is
 /// reused by the next branch that needs one, which keeps unrelated lines still.
-pub fn layout(commits: Vec<Commit>) -> Graph {
+pub fn layout(commits: Vec<Commit>, head: Option<&str>) -> Graph {
     let mut lanes: Vec<Option<Lane>> = Vec::new();
     let mut next_color: u16 = 0;
     let mut graph = Graph {
         rows: Vec::with_capacity(commits.len()),
         ..Graph::default()
     };
+    // Children always come before parents, so one pass that adds the parents
+    // of every reachable commit marks all of HEAD's history.
+    let mut reachable: HashSet<String> = head.map(str::to_string).into_iter().collect();
 
     fn alloc(lanes: &mut Vec<Option<Lane>>) -> usize {
         match lanes.iter().position(Option::is_none) {
@@ -158,6 +168,10 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
     };
 
     for c in commits {
+        let on_head = reachable.contains(&c.sha);
+        if on_head {
+            reachable.extend(c.parents.iter().cloned());
+        }
         let matching: Vec<usize> = lanes
             .iter()
             .enumerate()
@@ -177,6 +191,7 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
                     from: i as u16,
                     to: to as u16,
                     color: lane.color,
+                    head: lane.head,
                 });
             }
         }
@@ -198,11 +213,13 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
                 lanes[col] = Some(Lane {
                     expect: p.clone(),
                     color,
+                    head: on_head,
                 });
                 bottom.push(Edge {
                     from: col as u16,
                     to: col as u16,
                     color,
+                    head: on_head,
                 });
                 continue;
             }
@@ -210,13 +227,18 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
                 .iter()
                 .position(|l| l.as_ref().is_some_and(|l| &l.expect == p));
             let (to, to_color) = match existing {
-                Some(i) => (i, lanes[i].as_ref().unwrap().color),
+                Some(i) => {
+                    let lane = lanes[i].as_mut().unwrap();
+                    lane.head |= on_head;
+                    (i, lane.color)
+                }
                 None => {
                     let i = alloc(&mut lanes);
                     let pc = new_color();
                     lanes[i] = Some(Lane {
                         expect: p.clone(),
                         color: pc,
+                        head: on_head,
                     });
                     (i, pc)
                 }
@@ -225,14 +247,16 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
                 from: col as u16,
                 to: to as u16,
                 color: to_color,
+                head: on_head,
             });
         }
         for i in through {
-            let color = lanes[i].as_ref().unwrap().color;
+            let lane = lanes[i].as_ref().unwrap();
             bottom.push(Edge {
                 from: i as u16,
                 to: i as u16,
-                color,
+                color: lane.color,
+                head: lane.head,
             });
         }
 
@@ -250,6 +274,7 @@ pub fn layout(commits: Vec<Commit>) -> Graph {
             subject: c.subject,
             lane: col as u16,
             color,
+            on_head,
             top,
             bottom,
             refs: Vec::new(),
@@ -283,11 +308,10 @@ mod tests {
 
     #[test]
     fn linear_history_stays_in_one_lane() {
-        let g = layout(vec![
-            commit("c", &["b"]),
-            commit("b", &["a"]),
-            commit("a", &[]),
-        ]);
+        let g = layout(
+            vec![commit("c", &["b"]), commit("b", &["a"]), commit("a", &[])],
+            None,
+        );
         assert!(g.rows.iter().all(|r| r.lane == 0));
         assert_eq!(g.max_lanes, 1);
         assert_eq!(edges(&g.rows[0].top), vec![]);
@@ -298,11 +322,14 @@ mod tests {
     #[test]
     fn two_branches_from_one_fork_run_parallel_then_join() {
         // main: m -> base ; feature: f -> base
-        let g = layout(vec![
-            commit("m", &["base"]),
-            commit("f", &["base"]),
-            commit("base", &[]),
-        ]);
+        let g = layout(
+            vec![
+                commit("m", &["base"]),
+                commit("f", &["base"]),
+                commit("base", &[]),
+            ],
+            None,
+        );
         assert_eq!((g.rows[0].lane, g.rows[1].lane, g.rows[2].lane), (0, 1, 0));
         // At f, lane 0 passes straight through on both halves.
         assert_eq!(edges(&g.rows[1].top), vec![e(0, 0)]);
@@ -315,12 +342,15 @@ mod tests {
     #[test]
     fn merge_opens_a_lane_for_its_second_parent() {
         // M merges x into a; x branches off a's parent o.
-        let g = layout(vec![
-            commit("M", &["a", "x"]),
-            commit("x", &["o"]),
-            commit("a", &["o"]),
-            commit("o", &[]),
-        ]);
+        let g = layout(
+            vec![
+                commit("M", &["a", "x"]),
+                commit("x", &["o"]),
+                commit("a", &["o"]),
+                commit("o", &[]),
+            ],
+            None,
+        );
         assert_eq!(edges(&g.rows[0].bottom), vec![e(0, 0), e(0, 1)]);
         assert_eq!(g.rows[1].lane, 1);
         assert_eq!(g.rows[2].lane, 0);
@@ -330,13 +360,16 @@ mod tests {
 
     #[test]
     fn freed_lane_is_reused_without_shifting_others() {
-        let g = layout(vec![
-            commit("a", &["z"]),
-            commit("b", &["y"]),
-            commit("y", &[]),
-            commit("c", &["z"]),
-            commit("z", &[]),
-        ]);
+        let g = layout(
+            vec![
+                commit("a", &["z"]),
+                commit("b", &["y"]),
+                commit("y", &[]),
+                commit("c", &["z"]),
+                commit("z", &[]),
+            ],
+            None,
+        );
         assert_eq!(g.rows[1].lane, 1);
         // y ends lane 1; c is a new tip and takes the freed slot.
         assert_eq!(g.rows[3].lane, 1);
@@ -344,8 +377,27 @@ mod tests {
     }
 
     #[test]
+    fn only_heads_history_is_marked() {
+        // HEAD is on main (m); f is an unmerged feature off the same base.
+        let g = layout(
+            vec![
+                commit("f", &["base"]),
+                commit("m", &["base"]),
+                commit("base", &[]),
+            ],
+            Some("m"),
+        );
+        let on: Vec<bool> = g.rows.iter().map(|r| r.on_head).collect();
+        assert_eq!(on, vec![false, true, true]);
+        // At m, f's lane passes through dimmed and m's own lane is lit.
+        let m = &g.rows[1];
+        assert!(m.bottom.iter().any(|e| e.from == m.lane && e.head));
+        assert!(m.bottom.iter().any(|e| e.from != m.lane && !e.head));
+    }
+
+    #[test]
     fn row_lookup_and_labels() {
-        let mut g = layout(vec![commit("b", &["a"]), commit("a", &[])]);
+        let mut g = layout(vec![commit("b", &["a"]), commit("a", &[])], None);
         g.label([
             ("refs/heads/main", "b"),
             ("refs/tags/v1", "a"),

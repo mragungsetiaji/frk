@@ -23,7 +23,9 @@ export function GraphView() {
   const selectedIndex = useStore((s) => s.selectedIndex);
   const scrollTarget = useStore((s) => s.scrollTarget);
   const columns = useStore((s) => s.columns);
+  const headSha = useStore((s) => s.repo?.head.sha ?? null);
   const select = useStore((s) => s.select);
+  const openMenu = useStore((s) => s.openMenu);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,9 +77,16 @@ export function GraphView() {
       const ctx = cv.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawGraph(ctx, cache, { scrollTop: el.scrollTop, height: h, width: graphW, count, selected });
+      drawGraph(ctx, cache, {
+        scrollTop: el.scrollTop,
+        height: h,
+        width: graphW,
+        count,
+        selected,
+        head: headSha,
+      });
     });
-  }, [cache, graphW, count, selected]);
+  }, [cache, graphW, count, selected, headSha]);
 
   useLayoutEffect(paint);
 
@@ -123,9 +132,19 @@ export function GraphView() {
             return (
               <div
                 key={item.key}
-                className={`graph-row${row && row.sha === selected ? " selected" : ""}`}
+                className={`graph-row${row && row.sha === selected ? " selected" : ""}${
+                  row && !row.onHead ? " off-head" : ""
+                }${row && row.sha === headSha ? " is-head" : ""}`}
                 style={{ transform: `translateY(${item.start}px)`, gridTemplateColumns: template }}
                 onClick={() => row && select(row.sha, item.index)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (!row) return;
+                  select(row.sha, item.index);
+                  const st = useStore.getState();
+                  const labels = groupLabels(row, st.refIndex, st.changeIndex, st.repo?.head.branch);
+                  openMenu({ x: e.clientX, y: e.clientY, sha: row.sha, refs: labels[0]?.refNames ?? [] });
+                }}
               >
                 {row ? (
                   <RowCells
@@ -252,7 +271,7 @@ function RowCells({
           />
         )}
       </span>
-      <span className="message" style={{ borderLeftColor: color }}>
+      <span className="message" style={{ borderLeftColor: row.onHead ? color : `${color}55` }}>
         <span className="subject">{row.subject}</span>
         {showWhen && (
           <span className="when" title={new Date(row.time * 1000).toLocaleString()}>
@@ -271,22 +290,22 @@ interface Label {
   remotes: string[];
   isHead: boolean;
   change: RefChange | undefined;
+  /** Short names, for the tooltip. */
   names: string[];
+  /** Full ref names, for the context menu. */
+  refNames: string[];
 }
 
-/** One chip per branch: `feat/x` and `origin/feat/x` at the same commit merge. */
-function RefLabels({
-  row,
-  refIndex,
-  changeIndex,
-  headBranch,
-}: {
-  row: Row;
-  refIndex: Map<string, RefInfo>;
-  changeIndex: Map<string, RefChange>;
-  headBranch: string | null | undefined;
-}) {
-  if (row.refs.length === 0) return null;
+/**
+ * One label per branch: `feat/x` and `origin/feat/x` at the same commit share
+ * a chip. The checked-out branch comes first.
+ */
+export function groupLabels(
+  row: Row,
+  refIndex: Map<string, RefInfo>,
+  changeIndex: Map<string, RefChange>,
+  headBranch: string | null | undefined,
+): Label[] {
   const labels = new Map<string, Label>();
   for (const name of row.refs) {
     const ref = refIndex.get(name);
@@ -302,10 +321,12 @@ function RefLabels({
         isHead: false,
         change: undefined,
         names: [],
+        refNames: [],
       };
       labels.set(key, l);
     }
     l.names.push(ref?.short ?? name);
+    l.refNames.push(name);
     if (ref?.kind === "local") {
       l.local = true;
       if (ref.short === headBranch) l.isHead = true;
@@ -313,15 +334,35 @@ function RefLabels({
     if (ref?.kind === "remote") l.remotes.push(ref.short.split("/")[0]);
     l.change ??= changeIndex.get(name);
   }
-  const all = [...labels.values()].sort((a, b) => Number(b.isHead) - Number(a.isHead));
+  return [...labels.values()].sort((a, b) => Number(b.isHead) - Number(a.isHead));
+}
+
+/** One chip per branch: `feat/x` and `origin/feat/x` at the same commit merge. */
+function RefLabels({
+  row,
+  refIndex,
+  changeIndex,
+  headBranch,
+}: {
+  row: Row;
+  refIndex: Map<string, RefInfo>;
+  changeIndex: Map<string, RefChange>;
+  headBranch: string | null | undefined;
+}) {
+  if (row.refs.length === 0) return null;
+  const all = groupLabels(row, refIndex, changeIndex, headBranch);
   const [first, ...rest] = all;
   const color = laneColor(row.color);
 
   return (
     <>
       <span
-        className={`chip${first.isHead ? " head" : ""}`}
-        style={{ background: `color-mix(in srgb, ${color} 34%, #1b1e24)` }}
+        className={`chip${first.isHead ? " head" : ""}${row.onHead ? "" : " off"}`}
+        style={
+          first.isHead
+            ? { background: color, boxShadow: `0 0 0 2px #1b1e24, 0 0 0 3.5px ${color}, 0 0 14px ${color}aa` }
+            : { background: `color-mix(in srgb, ${color} ${row.onHead ? 40 : 22}%, #1b1e24)` }
+        }
         title={all.flatMap((l) => l.names).join("\n")}
       >
         {first.isHead && <span className="check">✓</span>}

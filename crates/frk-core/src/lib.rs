@@ -8,6 +8,7 @@
 //! If the walk ever becomes the bottleneck on a very large repository, `graph`
 //! is the one module worth moving onto gitoxide.
 
+pub mod actions;
 pub mod detail;
 pub mod git;
 pub mod graph;

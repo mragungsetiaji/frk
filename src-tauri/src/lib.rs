@@ -4,9 +4,10 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frk_core::Repo;
+use frk_core::actions::{self, Action};
 use frk_core::detail::{self, CommitDetail};
 use frk_core::graph::{self, Graph, Row};
-use frk_core::refs::{self, Head, RefInfo, RefKind};
+use frk_core::refs::{self, Head, RefInfo, RefKind, Remote};
 use frk_core::snapshot::{self, RefChange, Snapshot};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -19,6 +20,7 @@ struct Session {
     head: Head,
     target: Option<String>,
     merged: HashSet<String>,
+    remotes: Vec<Remote>,
     snapshot: Snapshot,
     snapshot_path: PathBuf,
     changes: Vec<RefChange>,
@@ -41,6 +43,7 @@ struct RepoView {
     head: Head,
     target: Option<String>,
     refs: Vec<RefView>,
+    remotes: Vec<Remote>,
     changes: Vec<RefChange>,
     /// True when no snapshot existed: everything was just recorded as seen.
     baseline: bool,
@@ -105,6 +108,7 @@ fn load(app: &AppHandle, path: &str) -> CmdResult<(Session, bool)> {
         head: refs::head(&repo).map_err(err)?,
         target: refs::default_target(&repo, &refs).map_err(err)?,
         merged: HashSet::new(),
+        remotes: refs::remotes(&repo).map_err(err)?,
         changes: Vec::new(),
         graph: Graph::default(),
         repo,
@@ -139,6 +143,7 @@ fn view(s: &Session, baseline: bool) -> RepoView {
                 info: r.clone(),
             })
             .collect(),
+        remotes: s.remotes.clone(),
         changes: s.changes.clone(),
         baseline,
     }
@@ -196,17 +201,17 @@ async fn fetch_all(app: AppHandle) -> CmdResult<()> {
 
 #[tauri::command]
 async fn build_graph(app: AppHandle, filter: GraphFilter) -> CmdResult<GraphMeta> {
-    let (repo, visible) = {
+    let (repo, visible, head) = {
         let st = app.state::<AppState>();
         let guard = st.0.lock().unwrap();
         let s = guard.as_ref().ok_or("no repository open")?;
-        (s.repo.clone(), visible_refs(s, &filter))
+        (s.repo.clone(), visible_refs(s, &filter), s.head.sha.clone())
     };
     let tips: Vec<String> = visible.iter().map(|(_, sha)| sha.clone()).collect();
     let max = filter.max_commits.max(1);
     let mut g = blocking(move || {
         let commits = graph::load_commits(&repo, &tips, max).map_err(err)?;
-        Ok(graph::layout(commits))
+        Ok(graph::layout(commits, head.as_deref()))
     })
     .await?;
     g.label(visible.iter().map(|(n, sha)| (n.as_str(), sha.as_str())));
@@ -302,6 +307,59 @@ fn mark_seen(state: State<AppState>, names: Option<Vec<String>>) -> CmdResult<Ve
     Ok(s.changes.clone())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActionResult {
+    message: String,
+    repo: RepoView,
+}
+
+/// Runs a context-menu action, then re-reads the repository. Any ref that
+/// moved during the action moved because the user asked it to, so it is
+/// marked seen rather than reported back as news.
+#[tauri::command]
+async fn run_action(app: AppHandle, action: Action) -> CmdResult<ActionResult> {
+    let (repo, before) = {
+        let st = app.state::<AppState>();
+        let guard = st.0.lock().unwrap();
+        let s = guard.as_ref().ok_or("no repository open")?;
+        let before: Vec<(String, String)> = s
+            .refs
+            .iter()
+            .map(|r| (r.name.clone(), r.sha.clone()))
+            .collect();
+        (s.repo.clone(), before)
+    };
+    let root = repo.root().display().to_string();
+    let handle = app.clone();
+    let (message, session) = blocking(move || {
+        let message = actions::run(&repo, &action).map_err(err)?;
+        let (mut session, _) = load(&handle, &root)?;
+        let mut moved: Vec<String> = session
+            .refs
+            .iter()
+            .filter(|r| !before.iter().any(|(n, sha)| n == &r.name && sha == &r.sha))
+            .map(|r| r.name.clone())
+            .collect();
+        moved.extend(
+            before
+                .iter()
+                .filter(|(n, _)| !session.refs.iter().any(|r| &r.name == n))
+                .map(|(n, _)| n.clone()),
+        );
+        if !moved.is_empty() {
+            session.snapshot.acknowledge(&session.refs, &moved);
+            session.snapshot.save(&session.snapshot_path).map_err(err)?;
+            recompute_changes(&mut session)?;
+        }
+        Ok((message, session))
+    })
+    .await?;
+    let repo = view(&session, false);
+    *app.state::<AppState>().0.lock().unwrap() = Some(session);
+    Ok(ActionResult { message, repo })
+}
+
 /// A repository path given on the command line (`frk ~/code/repo`), if any.
 #[tauri::command]
 fn launch_path() -> Option<String> {
@@ -320,6 +378,7 @@ fn current_repo(app: &AppHandle) -> CmdResult<Repo> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             open_repo,
@@ -331,7 +390,8 @@ pub fn run() {
             commit_detail,
             file_diff,
             mark_seen,
-            launch_path
+            launch_path,
+            run_action
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

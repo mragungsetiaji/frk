@@ -142,6 +142,101 @@ pub fn merged_into(repo: &Repo, target: &str) -> Result<HashSet<String>> {
     Ok(out.lines().map(str::to_string).collect())
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Remote {
+    pub name: String,
+    pub url: String,
+    /// Browser URL of the repository, e.g. `https://github.com/o/r`, when the
+    /// URL is one we know how to translate.
+    pub web: Option<String>,
+    /// `github`, `gitlab`, `bitbucket` or `other`: decides how links to a
+    /// branch, a commit or a new pull request are built.
+    pub host: &'static str,
+}
+
+pub fn remotes(repo: &Repo) -> Result<Vec<Remote>> {
+    let out = repo.run(["remote", "-v"])?;
+    let mut seen = HashSet::new();
+    Ok(out
+        .lines()
+        .filter(|l| l.ends_with("(fetch)"))
+        .filter_map(|l| {
+            let mut parts = l.split_whitespace();
+            let (name, url) = (parts.next()?, parts.next()?);
+            seen.insert(name.to_string()).then(|| {
+                let web = web_url(url, ssh_hostname);
+                let host = match web.as_deref() {
+                    Some(w) if w.contains("github") => "github",
+                    Some(w) if w.contains("gitlab") => "gitlab",
+                    Some(w) if w.contains("bitbucket") => "bitbucket",
+                    _ => "other",
+                };
+                Remote {
+                    name: name.to_string(),
+                    url: url.to_string(),
+                    web,
+                    host,
+                }
+            })
+        })
+        .collect())
+}
+
+/// `git@github.com:o/r.git`, `ssh://git@github.com/o/r`, `https://github.com/o/r.git`
+/// all become `https://github.com/o/r`. An SSH host goes through `resolve`
+/// first, so a `~/.ssh/config` alias such as `github-work` becomes the
+/// `github.com` it stands for.
+fn web_url(url: &str, resolve: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let (rest, ssh) = if let Some(r) = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+    {
+        (r.to_string(), false)
+    } else if let Some(r) = url.strip_prefix("ssh://") {
+        (r.to_string(), true)
+    } else if let Some((user_host, path)) = url.split_once(':') {
+        if user_host.contains('/') || path.starts_with("//") {
+            return None;
+        }
+        (format!("{user_host}/{path}"), true)
+    } else {
+        return None;
+    };
+    // Drop credentials or the ssh user, and an ssh port.
+    let rest = rest.rsplit_once('@').map_or(rest.as_str(), |(_, r)| r);
+    let (host, path) = rest.split_once('/')?;
+    let host = host.split(':').next()?;
+    let resolved = if ssh { resolve(host) } else { None };
+    let host = resolved.as_deref().unwrap_or(host);
+    let path = path.trim_end_matches('/').trim_end_matches(".git");
+    (!host.is_empty() && !path.is_empty()).then(|| format!("https://{host}/{path}"))
+}
+
+/// The real host behind an SSH alias, as `ssh -G` computes it from the user's
+/// config. Reads local config only; nothing is contacted.
+fn ssh_hostname(alias: &str) -> Option<String> {
+    if alias.starts_with('-') {
+        return None;
+    }
+    let mut cmd = std::process::Command::new("ssh");
+    cmd.args(["-G", alias]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("hostname "))
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +268,35 @@ mod tests {
         assert_eq!(r.sha, "commit1");
         assert_eq!(r.time, 1_700_000_000);
         assert_eq!(r.subject, "commit msg");
+    }
+
+    #[test]
+    fn remote_urls_become_web_urls() {
+        for url in [
+            "git@github.com:cekataiofficial/cekat-data-platform.git",
+            "ssh://git@github.com/cekataiofficial/cekat-data-platform",
+            "https://github.com/cekataiofficial/cekat-data-platform.git",
+            "https://user:token@github.com/cekataiofficial/cekat-data-platform/",
+            "ssh://git@github.com:22/cekataiofficial/cekat-data-platform.git",
+        ] {
+            assert_eq!(
+                web_url(url, |_| None).as_deref(),
+                Some("https://github.com/cekataiofficial/cekat-data-platform"),
+                "{url}"
+            );
+        }
+        assert_eq!(web_url("/srv/git/repo.git", |_| None), None);
+        assert_eq!(web_url("file:///srv/git/repo", |_| None), None);
+        // An SSH alias resolves; an https host is never looked up.
+        let alias = |h: &str| (h == "github-work").then(|| "github.com".to_string());
+        assert_eq!(
+            web_url("git@github-work:o/r.git", alias).as_deref(),
+            Some("https://github.com/o/r")
+        );
+        assert_eq!(
+            web_url("https://github-work/o/r", alias).as_deref(),
+            Some("https://github-work/o/r")
+        );
     }
 
     #[test]

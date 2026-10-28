@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, GraphFilter, GraphMeta, RefChange, RefInfo, RepoView } from "./api";
+import { Action, api, GraphFilter, GraphMeta, RefChange, RefInfo, RepoView } from "./api";
 
 const LAST_REPO = "frk.lastRepo";
 const RECENT = "frk.recentRepos";
@@ -53,6 +53,35 @@ function write(key: string, value: unknown) {
   }
 }
 
+/** What a right-click landed on: a commit, and the refs labelled on it. */
+export interface MenuTarget {
+  x: number;
+  y: number;
+  sha: string;
+  refs: string[];
+}
+
+export interface PromptSpec {
+  title: string;
+  label: string;
+  initial?: string;
+  confirm: string;
+  multiline?: boolean;
+  /** An optional checkbox under the field, e.g. "Check out after creating". */
+  option?: { label: string; initial: boolean };
+}
+
+export interface ConfirmSpec {
+  title: string;
+  body: string;
+  confirm: string;
+  danger?: boolean;
+}
+
+export type Dialog =
+  | ({ kind: "prompt"; resolve: (v: { value: string; option: boolean } | null) => void } & PromptSpec)
+  | ({ kind: "confirm"; resolve: (ok: boolean) => void } & ConfirmSpec);
+
 interface State {
   repo: RepoView | null;
   /** Full ref name to ref, rebuilt whenever `repo` changes. */
@@ -74,6 +103,11 @@ interface State {
   lastFetch: number | null;
   error: string | null;
   recent: string[];
+  menu: MenuTarget | null;
+  dialog: Dialog | null;
+  notice: { text: string; nonce: number } | null;
+  /** A write action is running; the menu is disabled meanwhile. */
+  busy: boolean;
 
   open(path: string): Promise<void>;
   /** Opens the repository named on the command line, else the last one used. */
@@ -88,6 +122,13 @@ interface State {
   jumpTo(sha: string, refName?: string): Promise<void>;
   markSeen(names?: string[]): Promise<void>;
   clearError(): void;
+  openMenu(t: MenuTarget): void;
+  closeMenu(): void;
+  prompt(spec: PromptSpec): Promise<{ value: string; option: boolean } | null>;
+  confirm(spec: ConfirmSpec): Promise<boolean>;
+  notify(text: string): void;
+  /** Runs a write action; resolves false (with the error shown) on failure. */
+  runAction(action: Action): Promise<boolean>;
 }
 
 function errorText(e: unknown): string {
@@ -140,6 +181,10 @@ export const useStore = create<State>((set, get) => {
     lastFetch: null,
     error: null,
     recent: readList(RECENT),
+    menu: null,
+    dialog: null,
+    notice: null,
+    busy: false,
 
     async open(path) {
       set({ loading: true, error: null });
@@ -259,6 +304,64 @@ export const useStore = create<State>((set, get) => {
 
     clearError() {
       set({ error: null });
+    },
+
+    openMenu(menu) {
+      set({ menu });
+    },
+
+    closeMenu() {
+      set({ menu: null });
+    },
+
+    prompt(spec) {
+      return new Promise((resolve) =>
+        set({
+          dialog: {
+            kind: "prompt",
+            ...spec,
+            resolve: (v) => {
+              set({ dialog: null });
+              resolve(v);
+            },
+          },
+        }),
+      );
+    },
+
+    confirm(spec) {
+      return new Promise((resolve) =>
+        set({
+          dialog: {
+            kind: "confirm",
+            ...spec,
+            resolve: (ok) => {
+              set({ dialog: null });
+              resolve(ok);
+            },
+          },
+        }),
+      );
+    },
+
+    notify(text) {
+      set({ notice: { text, nonce: Date.now() } });
+    },
+
+    async runAction(action) {
+      set({ busy: true, error: null });
+      try {
+        const res = await api.runAction(action);
+        applyRepo(res.repo);
+        await get().rebuild();
+        get().notify(res.message);
+        return true;
+      } catch (e) {
+        set({ error: errorText(e) });
+        return false;
+      } finally {
+        set({ busy: false });
+      }
     },
   };
 });

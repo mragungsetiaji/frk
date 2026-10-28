@@ -41,7 +41,15 @@ export async function installDevMock() {
       case "mark_seen":
         changes = a.names ? changes.filter((c) => !a.names.includes(c.name)) : [];
         return changes;
+      case "run_action":
+        return new Promise((r) =>
+          setTimeout(() => r({ message: `devMock: ${a.action.kind} (nothing ran)`, repo: { ...fx.repo, changes } }), 300),
+        );
+      case "plugin:opener|open_url":
+        window.open(a.url, "_blank", "noopener");
+        return null;
       case "plugin:dialog|open":
+      case "plugin:dialog|save":
         return null;
     }
     return Promise.reject(`devMock: unhandled ${cmd}`);

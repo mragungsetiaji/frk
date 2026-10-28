@@ -45,7 +45,8 @@ fn main() -> frk_core::Result<()> {
     let n = commits.len();
     let walk = t.elapsed();
     let t = Instant::now();
-    let mut g = graph::layout(commits);
+    let head = refs::head(&repo)?;
+    let mut g = graph::layout(commits, head.sha.as_deref());
     g.label(visible.iter().map(|r| (r.name.as_str(), r.sha.as_str())));
     println!(
         "graph: {} visible refs, {n} commits, {} lanes; walk {walk:?}, layout {:?}",

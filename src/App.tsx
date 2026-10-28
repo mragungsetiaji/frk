@@ -1,6 +1,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect } from "react";
 import { CommitPanel } from "./components/CommitPanel";
+import { ContextMenu } from "./components/ContextMenu";
+import { Dialogs } from "./components/Dialogs";
 import { GraphView } from "./components/GraphView";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -58,6 +60,8 @@ export default function App() {
       ) : (
         <Welcome loading={loading} />
       )}
+      <ContextMenu />
+      <Dialogs />
     </div>
   );
 }

@@ -37,6 +37,31 @@ with its commit count and authors, and stays listed until you mark it seen. A
 fetch alone never clears it. Changed branches are always drawn in the graph,
 even when old or merged.
 
+## The checked-out branch reads first
+
+Commits in HEAD's history are drawn at full strength: bright messages, solid
+thick lines, the HEAD chip lit up. Everything else is dimmed into the
+background. The `✓ branch` pill in the top bar jumps to HEAD.
+
+## Right-click
+
+On a commit or a branch label (in the graph or the sidebar): pull
+(fast-forward only), push / push and set upstream, set upstream, checkout
+(branch, remote branch as a tracking branch, or detached), create branch,
+reset the current branch soft / mixed / hard, reword the HEAD commit, revert,
+push and open a pull request, rename, delete local or remote, copy branch name,
+sha or web links, save a patch, solo / hide, and create plain or annotated tags.
+
+Each is a typed action in `crates/frk-core/src/actions.rs`, never raw git
+arguments from the UI; names go through `git check-ref-format` and commits are
+resolved to a sha first. Destructive ones ask first, and the integration
+branch cannot be deleted from here. Refs an action moves are marked seen, so
+your own push does not show up as news. Pull fetches only the one upstream
+branch it needs, so it never marks other people's work as seen.
+
+Not there yet: drop commit, move commit, apply patch, compare against the
+working tree, and rewording anything older than HEAD (all need a rebase).
+
 ## Develop
 
 Requires Node 22 (`.nvmrc`; Vite 8 needs ≥ 20.19) and Rust (pinned in

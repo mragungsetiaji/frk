@@ -5,8 +5,9 @@ use std::process::{Command, Output, Stdio};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("could not run git: {0}")]
-    Spawn(#[from] std::io::Error),
+    /// Starting git, or reading or writing a file, failed.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
     #[error("git {args} failed: {stderr}")]
     Git { args: String, stderr: String },
     #[error("not a git repository: {0}")]

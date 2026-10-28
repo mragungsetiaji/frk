@@ -128,6 +128,7 @@ function Branches() {
   const changeIndex = useStore((s) => s.changeIndex);
   const setFilter = useStore((s) => s.setFilter);
   const jumpTo = useStore((s) => s.jumpTo);
+  const openMenu = useStore((s) => s.openMenu);
   const [tab, setTab] = useState<"local" | "remote">("remote");
   const [query, setQuery] = useState("");
 
@@ -176,13 +177,22 @@ function Branches() {
           const shown = visible.has(r.name);
           const hidden = filter.hidden.includes(r.name);
           const change = changeIndex.get(r.name);
+          const isHead = r.kind === "local" && r.short === repo.head.branch;
           return (
-            <li key={r.name} className={`branch-item${shown ? "" : " dim"}`}>
+            <li
+              key={r.name}
+              className={`branch-item${shown ? "" : " dim"}${isHead ? " head" : ""}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openMenu({ x: e.clientX, y: e.clientY, sha: r.sha, refs: [r.name] });
+              }}
+            >
               <button className="icon-btn" title={hidden ? "Show in graph" : "Hide from graph"} onClick={() => toggleHidden(r.name)}>
                 <EyeIcon off={hidden} />
               </button>
               <button className="branch-main" onClick={() => jumpTo(r.sha, r.name)} title={r.subject}>
                 <span className="branch-name">
+                  {isHead && <span className="head-check">✓</span>}
                   <span className="ellipsis">{r.short}</span>
                   {change && <ChangeDot change={change} />}
                   {r.merged && <span className="tag-merged">merged</span>}

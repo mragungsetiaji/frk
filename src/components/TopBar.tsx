@@ -15,6 +15,7 @@ export function TopBar() {
   const openRepo = useStore((s) => s.open);
   const fetch = useStore((s) => s.fetch);
   const setAutoFetch = useStore((s) => s.setAutoFetch);
+  const jumpTo = useStore((s) => s.jumpTo);
   const [, tick] = useState(0);
 
   // Keep "fetched 2m ago" honest without re-rendering anything else.
@@ -58,9 +59,13 @@ export function TopBar() {
       {repo && (
         <>
           {head && (
-            <span className="pill" title="HEAD">
+            <button
+              className="pill head-pill"
+              title="Checked out. Click to jump to it."
+              onClick={() => repo.head.sha && jumpTo(repo.head.sha)}
+            >
               ✓ {head}
-            </span>
+            </button>
           )}
           {repo.target && (
             <span className="pill muted" title="Integration target, used to decide what counts as merged">

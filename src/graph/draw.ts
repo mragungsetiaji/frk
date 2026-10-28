@@ -60,9 +60,16 @@ type Seg = [x1: number, y1: number, x2: number, y2: number, leaving: boolean];
 export function drawGraph(
   ctx: CanvasRenderingContext2D,
   cache: RowCache,
-  opts: { scrollTop: number; height: number; width: number; count: number; selected: string | null },
+  opts: {
+    scrollTop: number;
+    height: number;
+    width: number;
+    count: number;
+    selected: string | null;
+    head: string | null;
+  },
 ) {
-  const { scrollTop, height, width, count, selected } = opts;
+  const { scrollTop, height, width, count, selected, head } = opts;
   ctx.clearRect(0, 0, width, height);
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - 1);
   const last = Math.min(count - 1, Math.ceil((scrollTop + height) / ROW_H));
@@ -73,16 +80,17 @@ export function drawGraph(
     if (row) visible.push([row, i * ROW_H - scrollTop]);
   }
 
-  // Row bands: a tint from the node to the message column, and a faint line
-  // tying a branch label to its node.
+  // Row bands: a tint from the node to the message column, and a line tying a
+  // branch label to its node. HEAD's history gets the strong version of both;
+  // everything else stays in the background.
   for (const [row, y] of visible) {
     const x = laneX(row.lane);
     const color = laneColor(row.color);
-    ctx.fillStyle = color + (row.sha === selected ? "40" : "1c");
+    ctx.fillStyle = color + (row.sha === selected ? "48" : row.onHead ? "2a" : "0f");
     ctx.fillRect(x, y + 1, width - x, ROW_H - 2);
     if (row.refs.length > 0) {
-      ctx.strokeStyle = color + "90";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = color + (row.onHead ? "c0" : "50");
+      ctx.lineWidth = row.sha === head ? 2 : 1;
       ctx.beginPath();
       ctx.moveTo(0, y + ROW_H / 2 + 0.5);
       ctx.lineTo(x - NODE_R, y + ROW_H / 2 + 0.5);
@@ -90,24 +98,28 @@ export function drawGraph(
     }
   }
 
-  const byColor = new Map<number, Seg[]>();
-  const add = (c: number, seg: Seg) => {
-    let list = byColor.get(c);
-    if (!list) byColor.set(c, (list = []));
-    list.push(seg);
+  // Batched by colour and by whether the segment is in HEAD's history.
+  const batches = new Map<string, { color: number; head: boolean; segs: Seg[] }>();
+  const add = (color: number, onHead: boolean, seg: Seg) => {
+    const key = `${color}:${onHead}`;
+    let b = batches.get(key);
+    if (!b) batches.set(key, (b = { color, head: onHead, segs: [] }));
+    b.segs.push(seg);
   };
   for (const [row, y] of visible) {
     const mid = y + ROW_H / 2;
-    for (const e of row.top) add(e.color, [laneX(e.from), y, laneX(e.to), mid, false]);
-    for (const e of row.bottom) add(e.color, [laneX(e.from), mid, laneX(e.to), y + ROW_H, true]);
+    for (const e of row.top) add(e.color, e.head, [laneX(e.from), y, laneX(e.to), mid, false]);
+    for (const e of row.bottom) add(e.color, e.head, [laneX(e.from), mid, laneX(e.to), y + ROW_H, true]);
   }
-  ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  for (const [c, segs] of byColor) {
-    ctx.strokeStyle = laneColor(c);
+  // Dimmed lines first, so HEAD's lines are drawn over them where they cross.
+  const ordered = [...batches.values()].sort((a, b) => Number(a.head) - Number(b.head));
+  for (const b of ordered) {
+    ctx.strokeStyle = laneColor(b.color) + (b.head ? "" : "59");
+    ctx.lineWidth = b.head ? 2.5 : 1.75;
     ctx.beginPath();
-    for (const seg of segs) segment(ctx, seg);
+    for (const seg of b.segs) segment(ctx, seg);
     ctx.stroke();
   }
 
@@ -118,6 +130,14 @@ export function drawGraph(
     const x = laneX(row.lane);
     const cy = y + ROW_H / 2;
     const color = laneColor(row.color);
+    ctx.globalAlpha = row.onHead || row.sha === selected ? 1 : 0.45;
+    if (row.sha === head) {
+      // A halo around the checked-out commit.
+      ctx.beginPath();
+      ctx.arc(x, cy, NODE_R + 5, 0, Math.PI * 2);
+      ctx.fillStyle = color + "40";
+      ctx.fill();
+    }
     if (isMergeDot(row)) {
       ctx.beginPath();
       ctx.arc(x, cy, MERGE_R, 0, Math.PI * 2);
@@ -134,6 +154,7 @@ export function drawGraph(
       ctx.fillStyle = "#fff";
       ctx.fillText(initials(row.author), x, cy + 0.5);
     }
+    ctx.globalAlpha = 1;
     if (row.sha === selected) {
       ctx.beginPath();
       ctx.arc(x, cy, (isMergeDot(row) ? MERGE_R : NODE_R) + 3, 0, Math.PI * 2);
