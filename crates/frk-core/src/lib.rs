@@ -10,6 +10,7 @@
 
 pub mod actions;
 pub mod detail;
+pub mod file;
 pub mod git;
 pub mod graph;
 pub mod refs;

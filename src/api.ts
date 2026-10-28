@@ -48,6 +48,7 @@ export interface RepoView {
   target: string | null;
   refs: RefInfo[];
   remotes: Remote[];
+  work: { dirty: number; stashes: number };
   changes: RefChange[];
   baseline: boolean;
 }
@@ -112,6 +113,38 @@ export interface CommitDetail {
   files: FileChange[];
 }
 
+export interface FileVersions {
+  old: string | null;
+  new: string | null;
+  binary: boolean;
+  tooLarge: boolean;
+}
+
+export interface BlameCommit {
+  sha: string;
+  author: string;
+  email: string;
+  time: number;
+  summary: string;
+}
+
+export interface Blame {
+  commits: BlameCommit[];
+  /** Per line of the file, an index into `commits`. */
+  lines: number[];
+}
+
+export interface HistoryEntry {
+  sha: string;
+  author: string;
+  email: string;
+  time: number;
+  subject: string;
+  path: string;
+  oldPath: string | null;
+  status: string;
+}
+
 /** Mirrors `frk_core::actions::Action`. */
 export type Action =
   | { kind: "checkout"; branch: string }
@@ -125,7 +158,10 @@ export type Action =
   | { kind: "push"; branch: string }
   | { kind: "setUpstream"; branch: string; upstream: string }
   | { kind: "rename"; from: string; to: string }
-  | { kind: "deleteLocal"; branch: string; force: boolean }
+  | { kind: "deleteLocal"; branch: string; force: boolean; expect?: string }
+  | { kind: "deleteTag"; name: string }
+  | { kind: "stash"; message: string | null }
+  | { kind: "stashPop" }
   | { kind: "deleteRemote"; remoteBranch: string }
   | { kind: "tag"; name: string; at: string; message: string | null }
   | { kind: "createPatch"; sha: string; path: string };
@@ -143,9 +179,15 @@ export const api = {
   graphRows: (start: number, end: number) => invoke<Row[]>("graph_rows", { start, end }),
   findRow: (sha: string) => invoke<number | null>("find_row", { sha }),
   commitDetail: (sha: string) => invoke<CommitDetail>("commit_detail", { sha }),
-  fileDiff: (sha: string, path: string, oldPath: string | null) =>
-    invoke<string>("file_diff", { sha, path, oldPath }),
+  fileDiff: (sha: string, path: string, oldPath: string | null, ignoreWhitespace = false) =>
+    invoke<string>("file_diff", { sha, path, oldPath, ignoreWhitespace }),
+  fileVersions: (sha: string, path: string, oldPath: string | null) =>
+    invoke<FileVersions>("file_versions", { sha, path, oldPath }),
+  blame: (sha: string, path: string) => invoke<Blame>("blame", { sha, path }),
+  fileHistory: (sha: string, path: string) => invoke<HistoryEntry[]>("file_history", { sha, path }),
+  treeFiles: (sha: string) => invoke<string[]>("tree_files", { sha }),
   runAction: (action: Action) => invoke<ActionResult>("run_action", { action }),
+  openTerminal: (app: string | null) => invoke<void>("open_terminal", { app }),
   launchPath: () => invoke<string | null>("launch_path"),
   markSeen: (names?: string[]) => invoke<RefChange[]>("mark_seen", { names: names ?? null }),
 };

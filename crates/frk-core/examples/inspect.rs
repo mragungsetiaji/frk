@@ -88,12 +88,27 @@ fn main() -> frk_core::Result<()> {
         let d = detail::commit_detail(&repo, &row.sha)?;
         println!("detail {} files in {:?}", d.files.len(), t.elapsed());
         if let Some(f) = d.files.first() {
-            let diff = detail::file_diff(&repo, &d.sha, &f.path, f.old_path.as_deref())?;
+            let diff = detail::file_diff(&repo, &d.sha, &f.path, f.old_path.as_deref(), false)?;
             println!(
                 "  {} {:?} diff {} lines",
                 f.status,
                 f.path,
                 diff.lines().count()
+            );
+            let t = Instant::now();
+            let v = frk_core::file::file_versions(&repo, &d.sha, &f.path, f.old_path.as_deref())?;
+            let bl = frk_core::file::blame(&repo, &d.sha, &f.path).ok();
+            let h = frk_core::file::history(&repo, &d.sha, &f.path, 500)?;
+            let tree = frk_core::file::tree_files(&repo, &d.sha)?;
+            println!(
+                "  versions old={:?} new={:?} lines; blame {:?} lines / {:?} commits; history {}; tree {} files; {:?}",
+                v.old.as_ref().map(|t| t.lines().count()),
+                v.new.as_ref().map(|t| t.lines().count()),
+                bl.as_ref().map(|b| b.lines.len()),
+                bl.as_ref().map(|b| b.commits.len()),
+                h.len(),
+                tree.len(),
+                t.elapsed()
             );
         }
     }

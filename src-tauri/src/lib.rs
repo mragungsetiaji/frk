@@ -6,8 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use frk_core::Repo;
 use frk_core::actions::{self, Action};
 use frk_core::detail::{self, CommitDetail};
+use frk_core::file::{self, Blame, FileVersions, HistoryEntry};
 use frk_core::graph::{self, Graph, Row};
-use frk_core::refs::{self, Head, RefInfo, RefKind, Remote};
+use frk_core::refs::{self, Head, RefInfo, RefKind, Remote, WorkStatus};
 use frk_core::snapshot::{self, RefChange, Snapshot};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -21,6 +22,7 @@ struct Session {
     target: Option<String>,
     merged: HashSet<String>,
     remotes: Vec<Remote>,
+    work: WorkStatus,
     snapshot: Snapshot,
     snapshot_path: PathBuf,
     changes: Vec<RefChange>,
@@ -44,6 +46,7 @@ struct RepoView {
     target: Option<String>,
     refs: Vec<RefView>,
     remotes: Vec<Remote>,
+    work: WorkStatus,
     changes: Vec<RefChange>,
     /// True when no snapshot existed: everything was just recorded as seen.
     baseline: bool,
@@ -109,6 +112,7 @@ fn load(app: &AppHandle, path: &str) -> CmdResult<(Session, bool)> {
         target: refs::default_target(&repo, &refs).map_err(err)?,
         merged: HashSet::new(),
         remotes: refs::remotes(&repo).map_err(err)?,
+        work: refs::work_status(&repo).map_err(err)?,
         changes: Vec::new(),
         graph: Graph::default(),
         repo,
@@ -144,6 +148,7 @@ fn view(s: &Session, baseline: bool) -> RepoView {
             })
             .collect(),
         remotes: s.remotes.clone(),
+        work: s.work,
         changes: s.changes.clone(),
         baseline,
     }
@@ -290,9 +295,43 @@ async fn file_diff(
     sha: String,
     path: String,
     old_path: Option<String>,
+    ignore_whitespace: bool,
 ) -> CmdResult<String> {
     let repo = current_repo(&app)?;
-    blocking(move || detail::file_diff(&repo, &sha, &path, old_path.as_deref()).map_err(err)).await
+    blocking(move || {
+        detail::file_diff(&repo, &sha, &path, old_path.as_deref(), ignore_whitespace).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn file_versions(
+    app: AppHandle,
+    sha: String,
+    path: String,
+    old_path: Option<String>,
+) -> CmdResult<FileVersions> {
+    let repo = current_repo(&app)?;
+    blocking(move || file::file_versions(&repo, &sha, &path, old_path.as_deref()).map_err(err))
+        .await
+}
+
+#[tauri::command]
+async fn blame(app: AppHandle, sha: String, path: String) -> CmdResult<Blame> {
+    let repo = current_repo(&app)?;
+    blocking(move || file::blame(&repo, &sha, &path).map_err(err)).await
+}
+
+#[tauri::command]
+async fn file_history(app: AppHandle, sha: String, path: String) -> CmdResult<Vec<HistoryEntry>> {
+    let repo = current_repo(&app)?;
+    blocking(move || file::history(&repo, &sha, &path, 500).map_err(err)).await
+}
+
+#[tauri::command]
+async fn tree_files(app: AppHandle, sha: String) -> CmdResult<Vec<String>> {
+    let repo = current_repo(&app)?;
+    blocking(move || file::tree_files(&repo, &sha).map_err(err)).await
 }
 
 /// Acknowledges changes. `names: None` marks every change seen.
@@ -360,6 +399,64 @@ async fn run_action(app: AppHandle, action: Action) -> CmdResult<ActionResult> {
     Ok(ActionResult { message, repo })
 }
 
+/// Opens a terminal in the repository. `app` is the user's choice from
+/// settings: an application name on macOS (`open -a`), a program on Windows
+/// and Linux. Without one, the platform's usual terminal.
+#[tauri::command]
+fn open_terminal(state: State<AppState>, app: Option<String>) -> CmdResult<()> {
+    let root = {
+        let guard = state.0.lock().unwrap();
+        guard
+            .as_ref()
+            .ok_or("no repository open")?
+            .repo
+            .root()
+            .to_path_buf()
+    };
+    let app = app.map(|a| a.trim().to_string()).filter(|a| !a.is_empty());
+    if app.as_deref().is_some_and(|a| a.starts_with('-')) {
+        return Err("invalid terminal application".into());
+    }
+    spawn_terminal(&root, app.as_deref()).map_err(|e| format!("could not open a terminal: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_terminal(root: &std::path::Path, app: Option<&str>) -> std::io::Result<()> {
+    std::process::Command::new("open")
+        .args(["-a", app.unwrap_or("Terminal")])
+        .arg(root)
+        .spawn()
+        .map(drop)
+}
+
+#[cfg(windows)]
+fn spawn_terminal(root: &std::path::Path, app: Option<&str>) -> std::io::Result<()> {
+    use std::process::Command;
+    if let Some(app) = app {
+        return Command::new(app).current_dir(root).spawn().map(drop);
+    }
+    // Windows Terminal when it is installed, the classic console otherwise.
+    Command::new("wt")
+        .arg("-d")
+        .arg(root)
+        .spawn()
+        .or_else(|_| {
+            Command::new("cmd")
+                .args(["/c", "start", "cmd", "/k", "cd", "/d"])
+                .arg(root)
+                .spawn()
+        })
+        .map(drop)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn spawn_terminal(root: &std::path::Path, app: Option<&str>) -> std::io::Result<()> {
+    std::process::Command::new(app.unwrap_or("x-terminal-emulator"))
+        .current_dir(root)
+        .spawn()
+        .map(drop)
+}
+
 /// A repository path given on the command line (`frk ~/code/repo`), if any.
 #[tauri::command]
 fn launch_path() -> Option<String> {
@@ -391,7 +488,12 @@ pub fn run() {
             file_diff,
             mark_seen,
             launch_path,
-            run_action
+            run_action,
+            file_versions,
+            blame,
+            file_history,
+            tree_files,
+            open_terminal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

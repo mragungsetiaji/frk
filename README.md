@@ -62,6 +62,39 @@ branch it needs, so it never marks other people's work as seen.
 Not there yet: drop commit, move commit, apply patch, compare against the
 working tree, and rewording anything older than HEAD (all need a rebase).
 
+## File view
+
+Clicking a file in the commit panel opens it full page over the graph (Esc
+closes it and the graph is where you left it):
+
+- **Diff View**, unified or split, with syntax highlighting (Prism, whole file
+  highlighted once so multi-line comments and strings colour correctly),
+  word-level change marks within edited lines, ↑/↓ between changes, and a ¶
+  toggle that hides whitespace-only changes (`git diff -w`).
+- **File View**: the whole file at that commit, with this commit's added lines
+  marked.
+- **Blame** and **History** (follows renames); clicking an entry opens that
+  commit's version.
+
+The commit panel lists files as paths or as a collapsible tree, and "View all
+files" shows the commit's whole tree. Every long list (diff lines, file, blame)
+is virtualized.
+
+## Toolbar
+
+Repository tabs sit in the title bar (macOS overlay title bar; the system title
+bar elsewhere). Below them: repository and branch pickers, then Undo / Redo,
+Pull (▾ for fetch all), Push, Branch, Stash, Pop and Terminal.
+
+Undo covers what can be reversed locally — checkout, create / rename / delete
+branch, reset, tag, stash — and is worked out before the action runs, from the
+state it started in. Undoing "create branch" refuses if the branch has gained
+commits since. Anything that cannot be undone (push, pull, revert, …) clears
+the history rather than leave steps that no longer apply.
+
+The footer shows fetch status; the gear opens settings for the auto-fetch
+interval and the terminal application.
+
 ## Develop
 
 Requires Node 22 (`.nvmrc`; Vite 8 needs ≥ 20.19) and Rust (pinned in

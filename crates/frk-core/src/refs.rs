@@ -142,6 +142,26 @@ pub fn merged_into(repo: &Repo, target: &str) -> Result<HashSet<String>> {
     Ok(out.lines().map(str::to_string).collect())
 }
 
+/// Uncommitted changes and stashes, for enabling Stash and Pop.
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkStatus {
+    /// Changed, staged or untracked paths.
+    pub dirty: u32,
+    pub stashes: u32,
+}
+
+pub fn work_status(repo: &Repo) -> Result<WorkStatus> {
+    let dirty = repo
+        .run(["status", "--porcelain", "--untracked-files=normal"])?
+        .lines()
+        .count() as u32;
+    let stashes = repo
+        .try_run(["stash", "list"])?
+        .map_or(0, |s| s.lines().count() as u32);
+    Ok(WorkStatus { dirty, stashes })
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Remote {

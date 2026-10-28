@@ -23,7 +23,9 @@ export async function installDevMock() {
         return fx.repo.root;
       case "open_repo":
       case "refresh":
-        return { ...fx.repo, changes };
+        return { work: { dirty: 2, stashes: 1 }, ...fx.repo, changes };
+      case "open_terminal":
+        return null;
       case "fetch_all":
         return new Promise((r) => setTimeout(r, 600));
       case "build_graph":
@@ -38,12 +40,20 @@ export async function installDevMock() {
         return fx.details[a.sha] ?? Promise.reject("not in the fixture (only the first 40 commits are)");
       case "file_diff":
         return fx.diffs[`${a.sha}:${a.path}`] ?? "";
+      case "file_versions":
+        return fx.versions?.[`${a.sha}:${a.path}`] ?? Promise.reject("not in the fixture");
+      case "blame":
+        return fx.blames?.[`${a.sha}:${a.path}`] ?? Promise.reject("not in the fixture");
+      case "file_history":
+        return fx.histories?.[`${a.sha}:${a.path}`] ?? [];
+      case "tree_files":
+        return fx.trees?.[a.sha] ?? Promise.reject("not in the fixture (first 5 commits only)");
       case "mark_seen":
         changes = a.names ? changes.filter((c) => !a.names.includes(c.name)) : [];
         return changes;
       case "run_action":
         return new Promise((r) =>
-          setTimeout(() => r({ message: `devMock: ${a.action.kind} (nothing ran)`, repo: { ...fx.repo, changes } }), 300),
+          setTimeout(() => r({ message: `devMock: ${a.action.kind} (nothing ran)`, repo: { work: { dirty: 2, stashes: 1 }, ...fx.repo, changes } }), 300),
         );
       case "plugin:opener|open_url":
         window.open(a.url, "_blank", "noopener");

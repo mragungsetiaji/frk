@@ -66,3 +66,20 @@ export function branchKey(short: string, kind: string): string {
   const i = short.indexOf("/");
   return i < 0 ? short : short.slice(i + 1);
 }
+
+/**
+ * Commit bodies are hard-wrapped at ~72 columns. Joins the lines of each
+ * paragraph back up so the text reflows to the panel, leaving lists, indented
+ * blocks and trailers (`Co-Authored-By: ...`) on their own lines.
+ */
+export function reflow(body: string): string {
+  const keep = /^(\s|[-*+] |\d+[.)] |>|[A-Za-z-]+: |\(cherry picked)/;
+  return body
+    .split(/\n{2,}/)
+    .map((para) =>
+      para
+        .split("\n")
+        .reduce((out, line, i) => (i === 0 ? line : out + (keep.test(line) ? "\n" : " ") + line), ""),
+    )
+    .join("\n\n");
+}

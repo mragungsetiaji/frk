@@ -78,6 +78,11 @@ pub enum Action {
     DeleteLocal {
         branch: String,
         force: bool,
+        /// When set, refuse unless the branch still points here. Undoing
+        /// "create branch" uses it so a branch that gained commits since is
+        /// never force-deleted.
+        #[serde(default)]
+        expect: Option<String>,
     },
     DeleteRemote {
         remote_branch: String,
@@ -87,6 +92,15 @@ pub enum Action {
         at: String,
         message: Option<String>,
     },
+    DeleteTag {
+        name: String,
+    },
+    /// Stashes tracked and untracked changes.
+    Stash {
+        message: Option<String>,
+    },
+    /// Applies the newest stash and drops it.
+    StashPop,
     /// Writes `git format-patch` output for one commit to `path`.
     CreatePatch {
         sha: String,
@@ -233,8 +247,20 @@ pub fn run(repo: &Repo, action: &Action) -> Result<String> {
             repo.run(["branch", "-m", from, to])?;
             Ok(format!("Renamed {from} to {to}"))
         }
-        Action::DeleteLocal { branch, force } => {
+        Action::DeleteLocal {
+            branch,
+            force,
+            expect,
+        } => {
             local_branch(repo, branch)?;
+            if let Some(expect) = expect {
+                let now = commit(repo, &format!("refs/heads/{branch}"))?;
+                if &now != expect {
+                    return Err(invalid(&format!(
+                        "{branch} has moved since it was created; not deleting it"
+                    )));
+                }
+            }
             repo.run(["branch", if *force { "-D" } else { "-d" }, branch])?;
             Ok(format!("Deleted {branch}"))
         }
@@ -261,6 +287,26 @@ pub fn run(repo: &Repo, action: &Action) -> Result<String> {
                 }
             }
             Ok(format!("Tagged {} as {name}", &at[..7]))
+        }
+        Action::DeleteTag { name } => {
+            tag_name(repo, name)?;
+            repo.run(["tag", "-d", name])?;
+            Ok(format!("Deleted tag {name}"))
+        }
+        Action::Stash { message } => {
+            let mut args = vec!["stash", "push", "--include-untracked"];
+            if let Some(m) = message.as_deref().filter(|m| !m.trim().is_empty()) {
+                args.extend(["-m", m]);
+            }
+            let out = repo.run(args)?;
+            if out.contains("No local changes to save") {
+                return Err(invalid("there are no local changes to stash"));
+            }
+            Ok("Stashed local changes".into())
+        }
+        Action::StashPop => {
+            repo.run(["stash", "pop"])?;
+            Ok("Applied and dropped the latest stash".into())
         }
         Action::CreatePatch { sha, path } => {
             let sha = commit(repo, sha)?;
@@ -515,6 +561,7 @@ mod tests {
             Action::DeleteLocal {
                 branch: "feat/y".into(),
                 force: false,
+                expect: None,
             },
         );
         assert!(local_branch(&repo, "feat/y").is_err());
@@ -559,6 +606,63 @@ mod tests {
             },
         );
         assert_eq!(repo.run(["cat-file", "-t", "v1"]).unwrap().trim(), "tag");
+    }
+
+    #[test]
+    fn stash_round_trip_and_guarded_delete() {
+        let (d, repo) = scratch();
+        assert!(run(&repo, &Action::Stash { message: None }).is_err());
+        std::fs::write(d.path().join("f"), "dirty").unwrap();
+        run_ok(
+            &repo,
+            Action::Stash {
+                message: Some("wip".into()),
+            },
+        );
+        assert_eq!(std::fs::read_to_string(d.path().join("f")).unwrap(), "two");
+        run_ok(&repo, Action::StashPop);
+        assert_eq!(
+            std::fs::read_to_string(d.path().join("f")).unwrap(),
+            "dirty"
+        );
+
+        let head = commit(&repo, "HEAD").unwrap();
+        let older = commit(&repo, "HEAD~1").unwrap();
+        run_ok(
+            &repo,
+            Action::CreateBranch {
+                name: "x".into(),
+                at: older.clone(),
+                checkout: false,
+            },
+        );
+        let guarded = Action::DeleteLocal {
+            branch: "x".into(),
+            force: true,
+            expect: Some(head),
+        };
+        assert!(
+            run(&repo, &guarded).is_err(),
+            "moved branch must not be deleted"
+        );
+        run_ok(
+            &repo,
+            Action::DeleteLocal {
+                branch: "x".into(),
+                force: true,
+                expect: Some(older),
+            },
+        );
+
+        run_ok(
+            &repo,
+            Action::Tag {
+                name: "t1".into(),
+                at: "HEAD".into(),
+                message: None,
+            },
+        );
+        run_ok(&repo, Action::DeleteTag { name: "t1".into() });
     }
 
     #[test]

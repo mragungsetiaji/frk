@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::git::{FS, Repo, Result};
+use crate::git::{FS, Repo, Result, check_sha};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +36,7 @@ pub struct FileChange {
 /// first parent, i.e. "what this merge brought into the branch", which is what
 /// a reviewer of a merged PR wants to see.
 pub fn commit_detail(repo: &Repo, sha: &str) -> Result<CommitDetail> {
+    check_sha(sha)?;
     let out = repo.run([
         "show",
         "-s",
@@ -67,7 +68,14 @@ pub fn commit_detail(repo: &Repo, sha: &str) -> Result<CommitDetail> {
 
 /// Unified diff of one file in a commit, against the same base as
 /// `commit_detail`.
-pub fn file_diff(repo: &Repo, sha: &str, path: &str, old_path: Option<&str>) -> Result<String> {
+pub fn file_diff(
+    repo: &Repo,
+    sha: &str,
+    path: &str,
+    old_path: Option<&str>,
+    ignore_whitespace: bool,
+) -> Result<String> {
+    check_sha(sha)?;
     let parents = repo.run(["rev-list", "--parents", "-n", "1", sha])?;
     let parents: Vec<String> = parents
         .split_whitespace()
@@ -80,6 +88,9 @@ pub fn file_diff(repo: &Repo, sha: &str, path: &str, old_path: Option<&str>) -> 
         "-M".into(),
         "--no-commit-id".into(),
     ];
+    if ignore_whitespace {
+        args.push("-w".into());
+    }
     args.extend(diff_range(sha, &parents));
     args.push("--".into());
     if let Some(old) = old_path {

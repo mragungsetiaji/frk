@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { CommitPanel } from "./components/CommitPanel";
 import { ContextMenu } from "./components/ContextMenu";
 import { Dialogs } from "./components/Dialogs";
+import { FileView } from "./components/FileView";
+import { Footer } from "./components/Footer";
 import { GraphView } from "./components/GraphView";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -54,12 +56,18 @@ export default function App() {
       {repo ? (
         <main className="workspace">
           <Sidebar />
-          <GraphView />
+          {/* The graph stays mounted under an open file, so closing the file
+              returns to the same scroll position. */}
+          <div className="center">
+            <GraphView />
+            <FileView />
+          </div>
           <CommitPanel />
         </main>
       ) : (
         <Welcome loading={loading} />
       )}
+      <Footer />
       <ContextMenu />
       <Dialogs />
     </div>

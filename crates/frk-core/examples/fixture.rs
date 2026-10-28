@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use frk_core::{Repo, detail, graph, refs, snapshot};
+use frk_core::{Repo, detail, file, graph, refs, snapshot};
 use serde_json::json;
 
 fn main() -> frk_core::Result<()> {
@@ -62,11 +62,27 @@ fn main() -> frk_core::Result<()> {
 
     let mut details = BTreeMap::new();
     let mut diffs = BTreeMap::new();
-    for row in g.slice(0, 40) {
+    let mut versions = BTreeMap::new();
+    let mut blames = BTreeMap::new();
+    let mut histories = BTreeMap::new();
+    let mut trees = BTreeMap::new();
+    for (i, row) in g.slice(0, 40).iter().enumerate() {
         let d = detail::commit_detail(&repo, &row.sha)?;
         for f in d.files.iter().take(3) {
-            let text = detail::file_diff(&repo, &d.sha, &f.path, f.old_path.as_deref())?;
-            diffs.insert(format!("{}:{}", d.sha, f.path), text);
+            let key = format!("{}:{}", d.sha, f.path);
+            let text = detail::file_diff(&repo, &d.sha, &f.path, f.old_path.as_deref(), false)?;
+            diffs.insert(key.clone(), text);
+            versions.insert(
+                key.clone(),
+                file::file_versions(&repo, &d.sha, &f.path, f.old_path.as_deref())?,
+            );
+            if f.status != "D" {
+                blames.insert(key.clone(), file::blame(&repo, &d.sha, &f.path)?);
+            }
+            histories.insert(key, file::history(&repo, &d.sha, &f.path, 50)?);
+        }
+        if i < 5 {
+            trees.insert(row.sha.clone(), file::tree_files(&repo, &row.sha)?);
         }
         details.insert(row.sha.clone(), d);
     }
@@ -97,6 +113,10 @@ fn main() -> frk_core::Result<()> {
         "rows": g.rows,
         "details": details,
         "diffs": diffs,
+        "versions": versions,
+        "blames": blames,
+        "histories": histories,
+        "trees": trees,
     });
     std::fs::write(&out, serde_json::to_vec(&fixture).unwrap())?;
     println!(

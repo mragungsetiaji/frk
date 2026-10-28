@@ -22,6 +22,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub const FS: char = '\x1f';
 pub const RS: char = '\x1e';
 
+/// Accepts only a hex object id (abbreviated or full). Commands that take a
+/// sha from the UI check it first, so nothing option-like or a revision
+/// expression ever reaches the command line in its place.
+pub fn check_sha(sha: &str) -> Result<()> {
+    if (4..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(Error::Git {
+            args: "(frk)".into(),
+            stderr: format!("not a commit id: {sha:?}"),
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Repo {
     root: PathBuf,

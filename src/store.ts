@@ -2,10 +2,16 @@ import { create } from "zustand";
 import { Action, api, GraphFilter, GraphMeta, RefChange, RefInfo, RepoView } from "./api";
 
 const LAST_REPO = "frk.lastRepo";
+const TABS = "frk.tabs";
 const RECENT = "frk.recentRepos";
 const PREFS = "frk.prefs";
 
 interface Prefs {
+  /** Terminal application for the toolbar's Terminal button; empty for the default. */
+  terminalApp: string;
+  diffLayout: "unified" | "split";
+  ignoreWhitespace: boolean;
+  fileList: "path" | "tree";
   days: number;
   hideMerged: boolean;
   tags: boolean;
@@ -20,6 +26,10 @@ export interface Columns {
 }
 
 const defaultPrefs: Prefs = {
+  terminalApp: "",
+  diffLayout: "unified",
+  ignoreWhitespace: false,
+  fileList: "tree",
   days: 30,
   hideMerged: true,
   tags: false,
@@ -51,6 +61,34 @@ function write(key: string, value: unknown) {
   } catch {
     // Storage is a convenience here; losing it only loses the remembered prefs.
   }
+}
+
+/**
+ * An action that can be taken back. `undo` runs in order to reverse `redo`;
+ * both are recorded before the action runs, from the state it started in.
+ */
+export interface UndoEntry {
+  label: string;
+  redo: Action[];
+  undo: Action[];
+}
+
+/** A file opened in the full-page file view. */
+export interface OpenFile {
+  sha: string;
+  path: string;
+  oldPath: string | null;
+  /** Its change in this commit, or null for a file the commit did not touch. */
+  status: string | null;
+}
+
+export type FileMode = "file" | "diff" | "blame" | "history";
+
+export interface FilePrefs {
+  diffLayout: "unified" | "split";
+  ignoreWhitespace: boolean;
+  fileList: "path" | "tree";
+  viewAllFiles: boolean;
 }
 
 /** What a right-click landed on: a commit, and the refs labelled on it. */
@@ -105,6 +143,14 @@ interface State {
   recent: string[];
   menu: MenuTarget | null;
   dialog: Dialog | null;
+  /** Open repositories, by root, in tab order. */
+  tabs: string[];
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
+  terminalApp: string;
+  file: OpenFile | null;
+  fileMode: FileMode;
+  filePrefs: FilePrefs;
   notice: { text: string; nonce: number } | null;
   /** A write action is running; the menu is disabled meanwhile. */
   busy: boolean;
@@ -122,13 +168,26 @@ interface State {
   jumpTo(sha: string, refName?: string): Promise<void>;
   markSeen(names?: string[]): Promise<void>;
   clearError(): void;
+  openFile(f: OpenFile, mode?: FileMode): void;
+  closeFile(): void;
+  setFileMode(mode: FileMode): void;
+  setFilePrefs(patch: Partial<FilePrefs>): void;
   openMenu(t: MenuTarget): void;
   closeMenu(): void;
   prompt(spec: PromptSpec): Promise<{ value: string; option: boolean } | null>;
   confirm(spec: ConfirmSpec): Promise<boolean>;
   notify(text: string): void;
-  /** Runs a write action; resolves false (with the error shown) on failure. */
-  runAction(action: Action): Promise<boolean>;
+  /**
+   * Runs a write action; resolves false (with the error shown) on failure.
+   * Reversible actions (checkout, create/rename/delete branch, reset, tag,
+   * stash) go onto the undo history; anything else clears it, since the
+   * recorded steps may no longer apply.
+   */
+  runAction(action: Action, undo?: { label: string; actions: Action[] }): Promise<boolean>;
+  undo(): Promise<void>;
+  redo(): Promise<void>;
+  closeTab(root: string): Promise<void>;
+  setTerminalApp(app: string): void;
 }
 
 function errorText(e: unknown): string {
@@ -139,8 +198,12 @@ export const useStore = create<State>((set, get) => {
   const prefs = readJSON(PREFS, defaultPrefs);
 
   const savePrefs = () => {
-    const { filter, autoFetchMin, columns } = get();
+    const { filter, autoFetchMin, columns, filePrefs, terminalApp } = get();
     write(PREFS, {
+      terminalApp,
+      diffLayout: filePrefs.diffLayout,
+      ignoreWhitespace: filePrefs.ignoreWhitespace,
+      fileList: filePrefs.fileList,
       days: filter.days,
       hideMerged: filter.hideMerged,
       tags: filter.tags,
@@ -155,6 +218,78 @@ export const useStore = create<State>((set, get) => {
       refIndex: new Map(repo.refs.map((r) => [r.name, r])),
       changeIndex: new Map(repo.changes.map((c) => [c.name, c])),
     });
+
+  /**
+   * How to take `action` back, worked out from the repository as it is before
+   * the action runs. Undefined for actions that cannot be reversed locally
+   * (push, pull, revert, remote deletes, ...).
+   */
+  const undoFor = (action: Action): { label: string; actions: Action[] } | undefined => {
+    const repo = get().repo;
+    if (!repo) return undefined;
+    const { head } = repo;
+    const back: Action | undefined = head.branch
+      ? { kind: "checkout", branch: head.branch }
+      : head.sha
+        ? { kind: "checkoutDetached", sha: head.sha }
+        : undefined;
+    switch (action.kind) {
+      case "checkout":
+        return back && { label: `checkout ${action.branch}`, actions: [back] };
+      case "checkoutRemote":
+        return back && { label: `checkout ${action.remoteBranch}`, actions: [back] };
+      case "checkoutDetached":
+        return back && { label: `checkout ${action.sha.slice(0, 7)}`, actions: [back] };
+      case "createBranch":
+        return {
+          label: `create branch ${action.name}`,
+          actions: [
+            ...(action.checkout && back ? [back] : []),
+            { kind: "deleteLocal", branch: action.name, force: true, expect: action.at },
+          ],
+        };
+      case "rename":
+        return { label: `rename ${action.from}`, actions: [{ kind: "rename", from: action.to, to: action.from }] };
+      case "deleteLocal": {
+        const ref = get().refIndex.get(`refs/heads/${action.branch}`);
+        return (
+          ref && {
+            label: `delete ${action.branch}`,
+            actions: [{ kind: "createBranch", name: action.branch, at: ref.sha, checkout: false }],
+          }
+        );
+      }
+      case "reset":
+        return head.sha
+          ? { label: `reset to ${action.to.slice(0, 7)}`, actions: [{ kind: "reset", mode: action.mode, to: head.sha }] }
+          : undefined;
+      case "tag":
+        return { label: `tag ${action.name}`, actions: [{ kind: "deleteTag", name: action.name }] };
+      case "stash":
+        return { label: "stash", actions: [{ kind: "stashPop" }] };
+      default:
+        return undefined;
+    }
+  };
+
+  /** Runs undo/redo steps without touching the history; stops at the first failure. */
+  const runSteps = async (steps: Action[]) => {
+    set({ busy: true, error: null });
+    try {
+      let res = null;
+      for (const step of steps) res = await api.runAction(step);
+      if (res) applyRepo(res.repo);
+      await get().rebuild();
+      return true;
+    } catch (e) {
+      set({ error: errorText(e) });
+      // Some steps may have run; show the repository as it now is.
+      await get().refresh();
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  };
 
   return {
     repo: null,
@@ -183,6 +318,18 @@ export const useStore = create<State>((set, get) => {
     recent: readList(RECENT),
     menu: null,
     dialog: null,
+    tabs: readList(TABS),
+    undoStack: [],
+    redoStack: [],
+    terminalApp: prefs.terminalApp,
+    file: null,
+    fileMode: "diff",
+    filePrefs: {
+      diffLayout: prefs.diffLayout,
+      ignoreWhitespace: prefs.ignoreWhitespace,
+      fileList: prefs.fileList,
+      viewAllFiles: false,
+    },
     notice: null,
     busy: false,
 
@@ -191,10 +338,16 @@ export const useStore = create<State>((set, get) => {
       try {
         const repo = await api.openRepo(path);
         const recent = [repo.root, ...get().recent.filter((r) => r !== repo.root)].slice(0, 8);
+        const tabs = get().tabs.includes(repo.root) ? get().tabs : [...get().tabs, repo.root];
         write(LAST_REPO, repo.root);
         write(RECENT, recent);
+        write(TABS, tabs);
         set((s) => ({
           recent,
+          tabs,
+          file: null,
+          undoStack: [],
+          redoStack: [],
           selected: null,
           selectedIndex: null,
           lastFetch: null,
@@ -269,7 +422,8 @@ export const useStore = create<State>((set, get) => {
 
     async select(sha, index) {
       const selectedIndex = index ?? (await api.findRow(sha));
-      set({ selected: sha, selectedIndex });
+      // The file view belongs to one commit; picking another closes it.
+      set((s) => ({ selected: sha, selectedIndex, file: s.file?.sha === sha ? s.file : null }));
     },
 
     async jumpTo(sha, refName) {
@@ -287,7 +441,12 @@ export const useStore = create<State>((set, get) => {
         set({ error: "That commit is outside the loaded history." });
         return;
       }
-      set({ selected: sha, selectedIndex: index, scrollTarget: { index, nonce: Date.now() } });
+      set((s) => ({
+        selected: sha,
+        selectedIndex: index,
+        scrollTarget: { index, nonce: Date.now() },
+        file: s.file?.sha === sha ? s.file : null,
+      }));
     },
 
     async markSeen(names) {
@@ -304,6 +463,27 @@ export const useStore = create<State>((set, get) => {
 
     clearError() {
       set({ error: null });
+    },
+
+    openFile(file, mode) {
+      // An untouched file has no diff to show; anything else keeps the mode
+      // the user was in, except that a file cannot be blamed where it was deleted.
+      const current = get().fileMode;
+      const fileMode = mode ?? (file.status == null ? "file" : current === "blame" && file.status === "D" ? "diff" : current);
+      set({ file, fileMode });
+    },
+
+    closeFile() {
+      set({ file: null });
+    },
+
+    setFileMode(fileMode) {
+      set({ fileMode });
+    },
+
+    setFilePrefs(patch) {
+      set((s) => ({ filePrefs: { ...s.filePrefs, ...patch } }));
+      savePrefs();
     },
 
     openMenu(menu) {
@@ -348,11 +528,17 @@ export const useStore = create<State>((set, get) => {
       set({ notice: { text, nonce: Date.now() } });
     },
 
-    async runAction(action) {
+    async runAction(action, explicitUndo) {
+      const undo = explicitUndo ?? undoFor(action);
       set({ busy: true, error: null });
       try {
         const res = await api.runAction(action);
         applyRepo(res.repo);
+        set((s) =>
+          undo
+            ? { undoStack: [...s.undoStack, { label: undo.label, redo: [action], undo: undo.actions }], redoStack: [] }
+            : { undoStack: [], redoStack: [] },
+        );
         await get().rebuild();
         get().notify(res.message);
         return true;
@@ -362,6 +548,52 @@ export const useStore = create<State>((set, get) => {
       } finally {
         set({ busy: false });
       }
+    },
+
+    async undo() {
+      const entry = get().undoStack[get().undoStack.length - 1];
+      if (!entry) return;
+      if (await runSteps(entry.undo)) {
+        set((s) => ({ undoStack: s.undoStack.slice(0, -1), redoStack: [...s.redoStack, entry] }));
+        get().notify(`Undid ${entry.label}`);
+      } else {
+        // A step failed part way: the recorded history no longer describes the repository.
+        set({ undoStack: [], redoStack: [] });
+      }
+    },
+
+    async redo() {
+      const entry = get().redoStack[get().redoStack.length - 1];
+      if (!entry) return;
+      if (await runSteps(entry.redo)) {
+        set((s) => ({ redoStack: s.redoStack.slice(0, -1), undoStack: [...s.undoStack, entry] }));
+        get().notify(`Redid ${entry.label}`);
+      } else {
+        set({ undoStack: [], redoStack: [] });
+      }
+    },
+
+    async closeTab(root) {
+      const tabs = get().tabs.filter((t) => t !== root);
+      write(TABS, tabs);
+      set({ tabs });
+      if (get().repo?.root !== root) return;
+      const next = tabs[tabs.length - 1];
+      if (next) {
+        await get().open(next);
+      } else {
+        try {
+          localStorage.removeItem(LAST_REPO);
+        } catch {
+          // Only the reopen-on-launch convenience is lost.
+        }
+        set({ repo: null, meta: null, selected: null, file: null, undoStack: [], redoStack: [] });
+      }
+    },
+
+    setTerminalApp(terminalApp) {
+      set({ terminalApp });
+      savePrefs();
     },
   };
 });
