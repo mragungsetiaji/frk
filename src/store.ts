@@ -8,8 +8,15 @@ const PREFS = "frk.prefs";
 
 export type ThemePref = "system" | "light" | "dark";
 
+/** Side panel widths in px. */
+export interface Panels {
+  sidebar: number;
+  detail: number;
+}
+
 interface Prefs {
   theme: ThemePref;
+  panels: Panels;
   /** Terminal application for the toolbar's Terminal button; empty for the default. */
   terminalApp: string;
   diffLayout: "unified" | "split";
@@ -30,6 +37,7 @@ export interface Columns {
 
 const defaultPrefs: Prefs = {
   theme: "system",
+  panels: { sidebar: 280, detail: 440 },
   terminalApp: "",
   diffLayout: "unified",
   ignoreWhitespace: false,
@@ -169,6 +177,7 @@ interface State {
   redoStack: UndoEntry[];
   terminalApp: string;
   theme: ThemePref;
+  panels: Panels;
   /** The theme actually shown, with "system" resolved. */
   resolvedTheme: "light" | "dark";
   file: OpenFile | null;
@@ -218,6 +227,7 @@ interface State {
   commit(): Promise<void>;
   setTerminalApp(app: string): void;
   setTheme(theme: ThemePref): void;
+  setPanels(patch: Partial<Panels>): void;
 }
 
 const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -241,9 +251,10 @@ export const useStore = create<State>((set, get) => {
   const prefs = readJSON(PREFS, defaultPrefs);
 
   const savePrefs = () => {
-    const { filter, autoFetchMin, columns, filePrefs, terminalApp, theme } = get();
+    const { filter, autoFetchMin, columns, filePrefs, terminalApp, theme, panels } = get();
     write(PREFS, {
       theme,
+      panels,
       terminalApp,
       diffLayout: filePrefs.diffLayout,
       ignoreWhitespace: filePrefs.ignoreWhitespace,
@@ -375,6 +386,7 @@ export const useStore = create<State>((set, get) => {
     redoStack: [],
     terminalApp: prefs.terminalApp,
     theme: prefs.theme,
+    panels: { ...defaultPrefs.panels, ...prefs.panels },
     resolvedTheme: resolveTheme(prefs.theme),
     file: null,
     fileMode: "diff",
@@ -708,6 +720,11 @@ export const useStore = create<State>((set, get) => {
       const wip = get().wip;
       const head = get().repo?.head.sha;
       if (head && wip && wip.unstaged.length + wip.staged.length === 0) await get().jumpTo(head);
+    },
+
+    setPanels(patch) {
+      set((s) => ({ panels: { ...s.panels, ...patch } }));
+      savePrefs();
     },
 
     setTheme(theme) {

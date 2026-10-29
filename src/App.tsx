@@ -7,6 +7,7 @@ import { FileView } from "./components/FileView";
 import { Footer } from "./components/Footer";
 import { GraphView } from "./components/GraphView";
 import { Sidebar } from "./components/Sidebar";
+import { Splitter } from "./components/Splitter";
 import { WipPanel } from "./components/WipPanel";
 import { TopBar } from "./components/TopBar";
 import { useStore } from "./store";
@@ -22,6 +23,7 @@ export default function App() {
   const autoFetchMin = useStore((s) => s.autoFetchMin);
   const clearError = useStore((s) => s.clearError);
   const wipSelected = useStore((s) => s.selected === WIP);
+  const panels = useStore((s) => s.panels);
 
   useEffect(() => {
     useStore.getState().reopenLast();
@@ -60,7 +62,10 @@ export default function App() {
         </div>
       )}
       {repo ? (
-        <main className="workspace">
+        <main
+          className="workspace"
+          style={{ gridTemplateColumns: `${panels.sidebar}px minmax(0, 1fr) ${panels.detail}px` }}
+        >
           <Sidebar />
           {/* The graph stays mounted under an open file, so closing the file
               returns to the same scroll position. */}
@@ -69,6 +74,8 @@ export default function App() {
             <FileView />
           </div>
           {wipSelected ? <WipPanel /> : <CommitPanel />}
+          <Splitter side="sidebar" />
+          <Splitter side="detail" />
         </main>
       ) : (
         <Welcome loading={loading} />

@@ -123,10 +123,25 @@ button:disabled {
 }
 
 .workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 440px;
+}
+
+/* Drag handles on the inner edges of the side panels. */
+.splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.splitter:hover,
+body.resizing .splitter:active {
+  background: linear-gradient(to right, transparent 2px, var(--accent) 2px, var(--accent) 4px, transparent 4px);
 }
 
 .spacer {
