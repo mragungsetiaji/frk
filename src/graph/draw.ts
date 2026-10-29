@@ -1,5 +1,5 @@
 import { Row, WIP } from "../api";
-import { initials, laneColor, personColor, SURFACE } from "../util";
+import { initials, laneColor, palette, personColor } from "../util";
 import { RowCache } from "./rowCache";
 
 export const ROW_H = 28;
@@ -67,9 +67,12 @@ export function drawGraph(
     count: number;
     selected: string | null;
     head: string | null;
+    /** Row whose ref label is under the pointer: gets a connector to its node. */
+    labelHover: string | null;
   },
 ) {
-  const { scrollTop, height, width, count, selected, head } = opts;
+  const { scrollTop, height, width, count, selected, head, labelHover } = opts;
+  const pal = palette();
   ctx.clearRect(0, 0, width, height);
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - 1);
   const last = Math.min(count - 1, Math.ceil((scrollTop + height) / ROW_H));
@@ -83,8 +86,23 @@ export function drawGraph(
   // Only the selected row is tinted; lanes and nodes carry the colour.
   for (const [row, y] of visible) {
     if (row.sha !== selected) continue;
-    ctx.fillStyle = "rgba(242, 169, 59, 0.13)";
+    ctx.fillStyle = pal.selection;
     ctx.fillRect(0, y, width, ROW_H);
+  }
+
+  // While a ref label is hovered, a thin dashed line ties it to its node.
+  for (const [row, y] of visible) {
+    if (row.sha !== labelHover || row.refs.length === 0) continue;
+    const mid = y + ROW_H / 2 + 0.5;
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = laneColor(row.color);
+    ctx.beginPath();
+    ctx.moveTo(0, mid);
+    ctx.lineTo(laneX(row.lane) - NODE_R - 2, mid);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Batched by colour and by whether the segment is in HEAD's history.
@@ -119,7 +137,7 @@ export function drawGraph(
     const x = laneX(row.lane);
     const cy = y + ROW_H / 2;
     const color = laneColor(row.color);
-    ctx.globalAlpha = row.onHead || row.sha === selected ? 1 : 0.45;
+    ctx.globalAlpha = row.onHead || row.sha === selected ? 1 : pal.dim;
     if (row.sha === head) {
       // A halo around the checked-out commit.
       ctx.beginPath();
@@ -131,7 +149,7 @@ export function drawGraph(
       // Uncommitted work: a hollow, dashed node.
       ctx.beginPath();
       ctx.arc(x, cy, NODE_R - 1, 0, Math.PI * 2);
-      ctx.fillStyle = SURFACE;
+      ctx.fillStyle = pal.surface;
       ctx.fill();
       ctx.setLineDash([3, 2.5]);
       ctx.lineWidth = 2;
@@ -159,7 +177,7 @@ export function drawGraph(
       ctx.beginPath();
       ctx.arc(x, cy, (isMergeDot(row) ? MERGE_R : NODE_R) + 3, 0, Math.PI * 2);
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = "#ffffff";
+      ctx.strokeStyle = pal.ring;
       ctx.stroke();
     }
   }

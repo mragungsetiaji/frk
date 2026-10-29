@@ -6,7 +6,10 @@ const TABS = "frk.tabs";
 const RECENT = "frk.recentRepos";
 const PREFS = "frk.prefs";
 
+export type ThemePref = "system" | "light" | "dark";
+
 interface Prefs {
+  theme: ThemePref;
   /** Terminal application for the toolbar's Terminal button; empty for the default. */
   terminalApp: string;
   diffLayout: "unified" | "split";
@@ -26,6 +29,7 @@ export interface Columns {
 }
 
 const defaultPrefs: Prefs = {
+  theme: "system",
   terminalApp: "",
   diffLayout: "unified",
   ignoreWhitespace: false,
@@ -164,6 +168,9 @@ interface State {
   undoStack: UndoEntry[];
   redoStack: UndoEntry[];
   terminalApp: string;
+  theme: ThemePref;
+  /** The theme actually shown, with "system" resolved. */
+  resolvedTheme: "light" | "dark";
   file: OpenFile | null;
   fileMode: FileMode;
   filePrefs: FilePrefs;
@@ -210,7 +217,21 @@ interface State {
   setDraft(patch: Partial<CommitDraft>): void;
   commit(): Promise<void>;
   setTerminalApp(app: string): void;
+  setTheme(theme: ThemePref): void;
 }
+
+const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+
+export function resolveTheme(theme: ThemePref): "light" | "dark" {
+  if (theme !== "system") return theme;
+  return darkQuery && !darkQuery.matches ? "light" : "dark";
+}
+
+/** Follows the OS when the preference is "system". */
+darkQuery?.addEventListener("change", () => {
+  const { theme } = useStore.getState();
+  if (theme === "system") useStore.setState({ resolvedTheme: resolveTheme(theme) });
+});
 
 function errorText(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
@@ -220,8 +241,9 @@ export const useStore = create<State>((set, get) => {
   const prefs = readJSON(PREFS, defaultPrefs);
 
   const savePrefs = () => {
-    const { filter, autoFetchMin, columns, filePrefs, terminalApp } = get();
+    const { filter, autoFetchMin, columns, filePrefs, terminalApp, theme } = get();
     write(PREFS, {
+      theme,
       terminalApp,
       diffLayout: filePrefs.diffLayout,
       ignoreWhitespace: filePrefs.ignoreWhitespace,
@@ -352,6 +374,8 @@ export const useStore = create<State>((set, get) => {
     undoStack: [],
     redoStack: [],
     terminalApp: prefs.terminalApp,
+    theme: prefs.theme,
+    resolvedTheme: resolveTheme(prefs.theme),
     file: null,
     fileMode: "diff",
     filePrefs: {
@@ -684,6 +708,11 @@ export const useStore = create<State>((set, get) => {
       const wip = get().wip;
       const head = get().repo?.head.sha;
       if (head && wip && wip.unstaged.length + wip.staged.length === 0) await get().jumpTo(head);
+    },
+
+    setTheme(theme) {
+      set({ theme, resolvedTheme: resolveTheme(theme) });
+      savePrefs();
     },
 
     setTerminalApp(terminalApp) {

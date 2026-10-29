@@ -1,24 +1,59 @@
-/** The app background, for canvas drawing that cannot read CSS variables. */
-export const SURFACE = "#131418";
+/**
+ * Colours the canvas needs, which cannot read CSS variables. Lanes start warm
+ * so the first (usually HEAD's) lane matches the accent; the light set is
+ * deeper and calmer so lines hold up on a pale background without glaring.
+ */
+const PALETTES = {
+  dark: {
+    surface: "#131418",
+    selection: "rgba(242, 169, 59, 0.13)",
+    ring: "#ffffff",
+    /** Opacity of nodes outside HEAD's history. */
+    dim: 0.45,
+    lanes: [
+      "#f2a93b",
+      "#3ec7b0",
+      "#ef6f6c",
+      "#6aa9f4",
+      "#a5d65a",
+      "#b48cf5",
+      "#f07fb0",
+      "#d9c27a",
+      "#5fd39a",
+      "#8a93f0",
+      "#f58a4b",
+      "#4fc3dc",
+    ],
+  },
+  light: {
+    surface: "#f4f2ed",
+    selection: "rgba(184, 112, 26, 0.12)",
+    ring: "#34363b",
+    dim: 0.6,
+    lanes: [
+      "#c27a1a",
+      "#1d9480",
+      "#c9544b",
+      "#3b78c4",
+      "#5f8f26",
+      "#7d5cc4",
+      "#bb5585",
+      "#9a7f33",
+      "#278c5c",
+      "#5560bb",
+      "#c4632a",
+      "#2585a0",
+    ],
+  },
+};
 
-/** Lane colours, starting warm so the first (usually HEAD's) lane matches the accent. */
-export const LANE_COLORS = [
-  "#f2a93b",
-  "#3ec7b0",
-  "#ef6f6c",
-  "#6aa9f4",
-  "#a5d65a",
-  "#b48cf5",
-  "#f07fb0",
-  "#d9c27a",
-  "#5fd39a",
-  "#8a93f0",
-  "#f58a4b",
-  "#4fc3dc",
-];
+export function palette() {
+  return document.documentElement.dataset.theme === "light" ? PALETTES.light : PALETTES.dark;
+}
 
 export function laneColor(i: number): string {
-  return LANE_COLORS[i % LANE_COLORS.length];
+  const lanes = palette().lanes;
+  return lanes[i % lanes.length];
 }
 
 export function timeAgo(unixSeconds: number, now = Date.now()): string {

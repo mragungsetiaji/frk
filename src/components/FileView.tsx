@@ -588,7 +588,7 @@ function BlameView({ lines, blame, file }: { lines: Lines; blame: Blame; file: O
             >
               <button
                 className="bl-gutter"
-                style={{ borderLeftColor: `rgba(63, 182, 232, ${0.15 + 0.85 * age})` }}
+                style={{ borderLeftColor: `color-mix(in srgb, var(--accent) ${Math.round(15 + 85 * age)}%, transparent)` }}
                 title={c ? `${c.summary}\n${c.author} · ${c.sha.slice(0, 7)} · ${new Date(c.time * 1000).toLocaleString()}` : undefined}
                 onClick={() => c && !mine && open(c.sha)}
               >

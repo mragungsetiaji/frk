@@ -4,7 +4,7 @@ import { RefChange, RefInfo, Row, WIP } from "../api";
 import { autoGraphWidth, drawGraph, isMergeDot, laneX, NODE_R, ROW_H } from "../graph/draw";
 import { RowCache } from "../graph/rowCache";
 import { useStore } from "../store";
-import { branchKey, laneColor, SURFACE, timeAgo } from "../util";
+import { branchKey, laneColor, palette, timeAgo } from "../util";
 import { TagIcon } from "./Icons";
 
 const MIN_LABEL_W = 90;
@@ -24,6 +24,8 @@ export function GraphView() {
   const scrollTarget = useStore((s) => s.scrollTarget);
   const columns = useStore((s) => s.columns);
   const headSha = useStore((s) => s.repo?.head.sha ?? null);
+  // Lane colours come from the theme; changing it re-renders and repaints.
+  const theme = useStore((s) => s.resolvedTheme);
   const select = useStore((s) => s.select);
   const openMenu = useStore((s) => s.openMenu);
 
@@ -32,6 +34,7 @@ export function GraphView() {
   const frame = useRef(0);
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const [tip, setTip] = useState<Tip | null>(null);
+  const [labelHover, setLabelHover] = useState<string | null>(null);
 
   const cache = useMemo(() => new RowCache(bump), [version]);
   useEffect(() => () => cache.dispose(), [cache]);
@@ -84,9 +87,12 @@ export function GraphView() {
         count,
         selected,
         head: headSha,
+        labelHover,
       });
     });
-  }, [cache, graphW, count, selected, headSha]);
+    // `theme` is read through palette() inside drawGraph.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cache, graphW, count, selected, headSha, labelHover, theme]);
 
   useLayoutEffect(paint);
 
@@ -153,6 +159,7 @@ export function GraphView() {
                     isLast={item.index === count - 1}
                     graphW={graphW}
                     onTip={setTip}
+                    onLabelHover={setLabelHover}
                   />
                 ) : (
                   <span className="row-loading" />
@@ -229,12 +236,14 @@ function RowCells({
   isLast,
   graphW,
   onTip,
+  onLabelHover,
 }: {
   row: Row;
   next: Row | undefined;
   isLast: boolean;
   graphW: number;
   onTip: (t: Tip | null) => void;
+  onLabelHover: (sha: string | null) => void;
 }) {
   const refIndex = useStore((s) => s.refIndex);
   const changeIndex = useStore((s) => s.changeIndex);
@@ -252,7 +261,11 @@ function RowCells({
 
   return (
     <>
-      <span className="labels">
+      <span
+        className="labels"
+        onMouseEnter={() => row.refs.length > 0 && onLabelHover(row.sha)}
+        onMouseLeave={() => onLabelHover(null)}
+      >
         <RefLabels row={row} refIndex={refIndex} changeIndex={changeIndex} headBranch={headBranch} />
       </span>
       <span className="graph-cell">
@@ -274,6 +287,7 @@ function RowCells({
         )}
       </span>
       <span className="message">
+        <span className="lane-dot" style={{ background: color }} />
         <span className="subject">{row.subject}</span>
         {showWhen && (
           <span className="when" title={new Date(row.time * 1000).toLocaleString()}>
@@ -362,7 +376,7 @@ function RefLabels({
         className={`chip${first.isHead ? " head" : ""}${row.onHead ? "" : " off"}`}
         style={
           first.isHead
-            ? { background: color, borderColor: color, boxShadow: `0 0 0 2px ${SURFACE}, 0 0 0 3.5px ${color}, 0 0 14px ${color}aa` }
+            ? { background: color, borderColor: color, boxShadow: `0 0 0 2px ${palette().surface}, 0 0 0 3.5px ${color}, 0 0 14px ${color}aa` }
             : { borderColor: `${color}${row.onHead ? "aa" : "55"}` }
         }
         title={all.flatMap((l) => l.names).join("\n")}

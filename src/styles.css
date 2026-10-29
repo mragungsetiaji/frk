@@ -2108,3 +2108,371 @@ body.resizing * {
 .danger-link:disabled {
   opacity: 0.4;
 }
+
+/* HEAD's history gets a faint warm tint across the whole row. */
+.graph-row:not(.off-head) {
+  background: rgba(242, 169, 59, 0.035);
+}
+
+.lane-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: -4px;
+  border-radius: 50%;
+}
+
+.graph-row.off-head .lane-dot {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------------------
+   Light theme: warm paper rather than white, medium contrast, calm colours.
+   Everything above is the dark theme; this block only overrides.
+   ------------------------------------------------------------------------ */
+
+:root[data-theme="light"] {
+  --bg: #f4f2ed;
+  --bg-2: #ecE9e2;
+  --bg-3: #e3dfd6;
+  --line: #d9d4c9;
+  --text: #34363b;
+  --muted: #7b7c80;
+  --accent: #b8701a;
+  --accent-ink: #fffaf2;
+  --sel: rgba(184, 112, 26, 0.12);
+  --hover: rgba(0, 0, 0, 0.035);
+  --add: #2f8a43;
+  --del: #c2453a;
+  color-scheme: light;
+}
+
+[data-theme="light"] .topbar-wrap {
+  background: #e7e3db;
+}
+
+[data-theme="light"] .repo-tab {
+  border-right-color: var(--line);
+}
+
+[data-theme="light"] .repo-tab.on,
+[data-theme="light"] .fv-name,
+[data-theme="light"] .graph-row.is-head .subject,
+[data-theme="light"] .graph-row.selected .subject {
+  color: #1f2126;
+}
+
+[data-theme="light"] .btn:hover:not(:disabled) {
+  border-color: #c4bdb0;
+}
+
+[data-theme="light"] .subject {
+  color: #34363b;
+}
+
+[data-theme="light"] .graph-row.off-head .subject {
+  color: #9a9a9c;
+}
+
+[data-theme="light"] .graph-row:not(.off-head) {
+  background: rgba(184, 112, 26, 0.045);
+}
+
+[data-theme="light"] .chip.head {
+  color: #fffaf2;
+}
+
+[data-theme="light"] .chip.off {
+  color: #8d8e92;
+}
+
+[data-theme="light"] .body,
+[data-theme="light"] .modal-body,
+[data-theme="light"] .tree-dir {
+  color: #4a4c52;
+}
+
+[data-theme="light"] .file-item.unchanged {
+  color: #8d8e92;
+}
+
+[data-theme="light"] .tooltip {
+  background: #34363b;
+  color: #f4f2ed;
+}
+
+[data-theme="light"] .tooltip::after {
+  border-top-color: #34363b;
+}
+
+/* Status colours: the same meaning, deeper so they read on paper. */
+[data-theme="light"] .s-M,
+[data-theme="light"] .s-T {
+  color: #a6781a;
+}
+
+[data-theme="light"] .s-R,
+[data-theme="light"] .s-C {
+  color: #7d5cc4;
+}
+
+[data-theme="light"] .head-check {
+  color: var(--add);
+}
+
+[data-theme="light"] .change-badge.new {
+  background: #dcefd9;
+  color: #2c6b33;
+}
+
+[data-theme="light"] .change-badge.moved {
+  background: #dbe7f3;
+  color: #2d5f8f;
+}
+
+[data-theme="light"] .change-badge.forced {
+  background: #f5e2c8;
+  color: #8a5212;
+}
+
+[data-theme="light"] .change-badge.gone {
+  background: #f3dad6;
+  color: #9a3a30;
+}
+
+[data-theme="light"] .error-bar {
+  background: #f3dad6;
+  color: #7d2b23;
+}
+
+[data-theme="light"] .error-text,
+[data-theme="light"] .danger-link,
+[data-theme="light"] .ctx-item.danger:not(:disabled) {
+  color: #b23b31;
+}
+
+/* Menus, dialogs, popovers */
+[data-theme="light"] .ctx-menu,
+[data-theme="light"] .settings {
+  border-color: #d2ccc0;
+  background: rgba(250, 248, 244, 0.97);
+  box-shadow: 0 12px 32px rgba(60, 50, 30, 0.16);
+}
+
+[data-theme="light"] .ctx-sep {
+  background: #ddd7cc;
+}
+
+[data-theme="light"] .ctx-item:disabled,
+[data-theme="light"] .tool:disabled {
+  color: #b0aea8;
+}
+
+[data-theme="light"] .ctx-hint {
+  color: #8d8e92;
+}
+
+[data-theme="light"] .modal-overlay {
+  background: rgba(60, 50, 30, 0.22);
+}
+
+[data-theme="light"] .modal {
+  border-color: #d2ccc0;
+  box-shadow: 0 18px 48px rgba(60, 50, 30, 0.2);
+}
+
+[data-theme="light"] .notice {
+  background: #fbfaf7;
+  border-color: #d2ccc0;
+  box-shadow: 0 8px 24px rgba(60, 50, 30, 0.14);
+}
+
+[data-theme="light"] .danger-btn {
+  border-color: #c9574d;
+  color: #b23b31;
+}
+
+/* Diffs */
+[data-theme="light"] .cl .ln,
+[data-theme="light"] .sd .ln,
+[data-theme="light"] .cl .mk,
+[data-theme="light"] .sd .mk {
+  color: #a7a49c;
+}
+
+[data-theme="light"] .cl.add,
+[data-theme="light"] .sd.add {
+  background: rgba(47, 138, 67, 0.1);
+}
+
+[data-theme="light"] .cl.del,
+[data-theme="light"] .sd.del {
+  background: rgba(194, 69, 58, 0.09);
+}
+
+[data-theme="light"] .cl.add .mk,
+[data-theme="light"] .cl.add .ln {
+  color: #2f8a43;
+}
+
+[data-theme="light"] .cl.del .mk,
+[data-theme="light"] .cl.del .ln {
+  color: #b23b31;
+}
+
+[data-theme="light"] .cl.add .wd,
+[data-theme="light"] .sd.add .wd {
+  background: rgba(47, 138, 67, 0.24);
+}
+
+[data-theme="light"] .cl.del .wd,
+[data-theme="light"] .sd.del .wd {
+  background: rgba(194, 69, 58, 0.22);
+}
+
+[data-theme="light"] .cl.hunk {
+  color: #5b6f85;
+  background: #e6e8e6;
+  border-top-color: #d6d8d4;
+}
+
+[data-theme="light"] .sd.blank {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0, 0, 0, 0.03) 6px 12px);
+}
+
+[data-theme="light"] .cl.blame.run-start {
+  border-top-color: #e2ddd3;
+}
+
+[data-theme="light"] .cl.blame:hover .bl-gutter {
+  background: #ebe7df;
+}
+
+/* Commit panel */
+[data-theme="light"] .wip-conflicts {
+  border-color: #d9b56e;
+  background: #f6ead2;
+  color: #7a5310;
+}
+
+[data-theme="light"] .btn.stage-all {
+  border-color: #7fb78a;
+  background: #e1efe0;
+  color: #276b33;
+}
+
+[data-theme="light"] .btn.stage-all:hover:not(:disabled) {
+  background: #d3e8d2;
+}
+
+[data-theme="light"] .row-action.stage {
+  border-color: #7fb78a;
+  color: #276b33;
+}
+
+[data-theme="light"] .row-action.unstage {
+  border-color: #d2a07a;
+  color: #8a5212;
+}
+
+[data-theme="light"] .commit-btn {
+  border-color: #c9d9c6;
+  background: #e6ede3;
+  color: #8a9a86;
+}
+
+[data-theme="light"] .commit-btn.ready {
+  border-color: #2f8a43;
+  background: #3a8f4c;
+  color: #fff;
+}
+
+[data-theme="light"] .commit-btn.ready:hover:not(:disabled) {
+  background: #327f42;
+}
+
+[data-theme="light"] .side-chip {
+  background: #f5e2c8;
+  color: #8a5212;
+}
+
+[data-theme="light"] .side-chip.staged {
+  background: #dcefd9;
+  color: #276b33;
+}
+
+/* Syntax colours, after VS Code Light+, softened */
+[data-theme="light"] .code {
+  color: #34363b;
+}
+
+[data-theme="light"] .t-comment,
+[data-theme="light"] .t-prolog,
+[data-theme="light"] .t-doctype,
+[data-theme="light"] .t-cdata {
+  color: #6b8a5b;
+}
+
+[data-theme="light"] .t-keyword,
+[data-theme="light"] .t-boolean,
+[data-theme="light"] .t-important,
+[data-theme="light"] .t-atrule,
+[data-theme="light"] .t-tag,
+[data-theme="light"] .t-selector,
+[data-theme="light"] .t-title {
+  color: #2f5fb3;
+}
+
+[data-theme="light"] .t-keyword.t-control-flow,
+[data-theme="light"] .t-control {
+  color: #9a3fb0;
+}
+
+[data-theme="light"] .t-string,
+[data-theme="light"] .t-char,
+[data-theme="light"] .t-attr-value,
+[data-theme="light"] .t-template-string,
+[data-theme="light"] .t-url,
+[data-theme="light"] .t-deleted {
+  color: #a8483a;
+}
+
+[data-theme="light"] .t-number,
+[data-theme="light"] .t-unit,
+[data-theme="light"] .t-inserted {
+  color: #2f7d5b;
+}
+
+[data-theme="light"] .t-function,
+[data-theme="light"] .t-method {
+  color: #7a5a1e;
+}
+
+[data-theme="light"] .t-class-name,
+[data-theme="light"] .t-builtin,
+[data-theme="light"] .t-namespace {
+  color: #23788f;
+}
+
+[data-theme="light"] .t-constant,
+[data-theme="light"] .t-symbol,
+[data-theme="light"] .t-enum {
+  color: #2b6cb0;
+}
+
+[data-theme="light"] .t-property,
+[data-theme="light"] .t-variable,
+[data-theme="light"] .t-parameter,
+[data-theme="light"] .t-attr-name,
+[data-theme="light"] .t-key {
+  color: #2a4d8a;
+}
+
+[data-theme="light"] .t-regex {
+  color: #a8483a;
+}
+
+[data-theme="light"] .t-operator,
+[data-theme="light"] .t-punctuation {
+  color: #4a4c52;
+}

@@ -63,6 +63,8 @@ function SettingsPane({ onClose }: { onClose: () => void }) {
   const fetching = useStore((s) => s.fetching);
   const lastFetch = useStore((s) => s.lastFetch);
   const terminalApp = useStore((s) => s.terminalApp);
+  const theme = useStore((s) => s.theme);
+  const setTheme = useStore((s) => s.setTheme);
   const setTerminalApp = useStore((s) => s.setTerminalApp);
   const ref = useRef<HTMLDivElement>(null);
   const [custom, setCustom] = useState(PRESETS.includes(autoFetchMin) ? "" : String(autoFetchMin));
@@ -94,6 +96,22 @@ function SettingsPane({ onClose }: { onClose: () => void }) {
       onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
       <h4>Settings</h4>
+      <div className="setting">
+        <div className="setting-label">Appearance</div>
+        <div className="segmented" role="radiogroup" aria-label="Theme">
+          {(["system", "light", "dark"] as const).map((t) => (
+            <button
+              key={t}
+              role="radio"
+              aria-checked={theme === t}
+              className={theme === t ? "on" : ""}
+              onClick={() => setTheme(t)}
+            >
+              {t === "system" ? "System" : t === "light" ? "Light" : "Dark"}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="setting">
         <div className="setting-label">
           Auto fetch
