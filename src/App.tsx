@@ -7,8 +7,10 @@ import { FileView } from "./components/FileView";
 import { Footer } from "./components/Footer";
 import { GraphView } from "./components/GraphView";
 import { Sidebar } from "./components/Sidebar";
+import { WipPanel } from "./components/WipPanel";
 import { TopBar } from "./components/TopBar";
 import { useStore } from "./store";
+import { WIP } from "./api";
 
 /** Refs are re-read on focus at most this often; it costs one `for-each-ref`. */
 const FOCUS_REFRESH_MS = 30_000;
@@ -19,6 +21,7 @@ export default function App() {
   const error = useStore((s) => s.error);
   const autoFetchMin = useStore((s) => s.autoFetchMin);
   const clearError = useStore((s) => s.clearError);
+  const wipSelected = useStore((s) => s.selected === WIP);
 
   useEffect(() => {
     useStore.getState().reopenLast();
@@ -34,6 +37,9 @@ export default function App() {
   useEffect(() => {
     let last = Date.now();
     const onFocus = () => {
+      // The working tree is cheap to re-read and the most likely thing to
+      // have changed while the window was in the background.
+      useStore.getState().loadWip();
       if (Date.now() - last < FOCUS_REFRESH_MS) return;
       last = Date.now();
       useStore.getState().refresh();
@@ -62,7 +68,7 @@ export default function App() {
             <GraphView />
             <FileView />
           </div>
-          <CommitPanel />
+          {wipSelected ? <WipPanel /> : <CommitPanel />}
         </main>
       ) : (
         <Welcome loading={loading} />

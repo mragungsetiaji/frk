@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Action, api, GraphFilter, GraphMeta, RefChange, RefInfo, RepoView } from "./api";
+import { Action, api, GraphFilter, GraphMeta, RefChange, RefInfo, RepoView, WipFile, WorkTree } from "./api";
 
 const LAST_REPO = "frk.lastRepo";
 const TABS = "frk.tabs";
@@ -80,7 +80,20 @@ export interface OpenFile {
   oldPath: string | null;
   /** Its change in this commit, or null for a file the commit did not touch. */
   status: string | null;
+  /** For an uncommitted file (`sha === WIP`): which side of the index it is on. */
+  wip?: { file: WipFile; staged: boolean };
 }
+
+/** The commit message being written in the WIP panel. */
+export interface CommitDraft {
+  summary: string;
+  description: string;
+  amend: boolean;
+  noVerify: boolean;
+  signOff: boolean;
+}
+
+const emptyDraft: CommitDraft = { summary: "", description: "", amend: false, noVerify: false, signOff: false };
 
 export type FileMode = "file" | "diff" | "blame" | "history";
 
@@ -143,6 +156,9 @@ interface State {
   recent: string[];
   menu: MenuTarget | null;
   dialog: Dialog | null;
+  /** The working tree, loaded when the WIP row is selected and on focus. */
+  wip: WorkTree | null;
+  draft: CommitDraft;
   /** Open repositories, by root, in tab order. */
   tabs: string[];
   undoStack: UndoEntry[];
@@ -187,6 +203,12 @@ interface State {
   undo(): Promise<void>;
   redo(): Promise<void>;
   closeTab(root: string): Promise<void>;
+  loadWip(): Promise<void>;
+  stage(paths: string[] | null): Promise<void>;
+  unstage(paths: string[] | null): Promise<void>;
+  discard(files: WipFile[] | null): Promise<void>;
+  setDraft(patch: Partial<CommitDraft>): void;
+  commit(): Promise<void>;
   setTerminalApp(app: string): void;
 }
 
@@ -267,6 +289,12 @@ export const useStore = create<State>((set, get) => {
         return { label: `tag ${action.name}`, actions: [{ kind: "deleteTag", name: action.name }] };
       case "stash":
         return { label: "stash", actions: [{ kind: "stashPop" }] };
+      case "commit":
+        // Undoing a commit or an amend moves the branch back and keeps the
+        // changes staged, the way they were before.
+        return head.sha
+          ? { label: action.amend ? "amend" : "commit", actions: [{ kind: "reset", mode: "soft", to: head.sha }] }
+          : undefined;
       default:
         return undefined;
     }
@@ -318,6 +346,8 @@ export const useStore = create<State>((set, get) => {
     recent: readList(RECENT),
     menu: null,
     dialog: null,
+    wip: null,
+    draft: emptyDraft,
     tabs: readList(TABS),
     undoStack: [],
     redoStack: [],
@@ -345,6 +375,8 @@ export const useStore = create<State>((set, get) => {
         set((s) => ({
           recent,
           tabs,
+          wip: null,
+          draft: emptyDraft,
           file: null,
           undoStack: [],
           redoStack: [],
@@ -589,6 +621,69 @@ export const useStore = create<State>((set, get) => {
         }
         set({ repo: null, meta: null, selected: null, file: null, undoStack: [], redoStack: [] });
       }
+    },
+
+    async loadWip() {
+      if (!get().repo) return;
+      try {
+        const wip = await api.wipStatus();
+        set({ wip });
+        // The WIP row appears or goes when the tree turns dirty or clean.
+        const clean = wip.unstaged.length + wip.staged.length + wip.conflicted.length === 0;
+        if (clean !== ((get().repo?.work.dirty ?? 0) === 0)) await get().refresh();
+      } catch (e) {
+        set({ error: errorText(e) });
+      }
+    },
+
+    async stage(paths) {
+      try {
+        set({ wip: await api.wipStage(paths) });
+      } catch (e) {
+        set({ error: errorText(e) });
+      }
+    },
+
+    async unstage(paths) {
+      try {
+        set({ wip: await api.wipUnstage(paths) });
+      } catch (e) {
+        set({ error: errorText(e) });
+      }
+    },
+
+    async discard(files) {
+      try {
+        set({ wip: await api.wipDiscard(files), file: null });
+        await get().loadWip();
+      } catch (e) {
+        set({ error: errorText(e) });
+      }
+    },
+
+    setDraft(patch) {
+      set((s) => ({ draft: { ...s.draft, ...patch } }));
+    },
+
+    async commit() {
+      const { draft } = get();
+      const message = draft.description.trim()
+        ? `${draft.summary.trim()}\n\n${draft.description.trim()}\n`
+        : `${draft.summary.trim()}\n`;
+      const ok = await get().runAction({
+        kind: "commit",
+        message,
+        amend: draft.amend,
+        noVerify: draft.noVerify,
+        signOff: draft.signOff,
+      });
+      if (!ok) return;
+      set({ draft: emptyDraft, file: null });
+      await get().loadWip();
+      // Show the commit just made unless there is still work left to commit.
+      const wip = get().wip;
+      const head = get().repo?.head.sha;
+      if (head && wip && wip.unstaged.length + wip.staged.length === 0) await get().jumpTo(head);
     },
 
     setTerminalApp(terminalApp) {

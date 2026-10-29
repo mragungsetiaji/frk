@@ -145,6 +145,23 @@ export interface HistoryEntry {
   status: string;
 }
 
+/** Pseudo-sha of the working tree's row in the graph (`frk_core::worktree::WIP`). */
+export const WIP = "WORKING";
+
+export interface WipFile {
+  path: string;
+  oldPath: string | null;
+  status: string;
+  untracked: boolean;
+}
+
+export interface WorkTree {
+  branch: string | null;
+  unstaged: WipFile[];
+  staged: WipFile[];
+  conflicted: string[];
+}
+
 /** Mirrors `frk_core::actions::Action`. */
 export type Action =
   | { kind: "checkout"; branch: string }
@@ -162,6 +179,7 @@ export type Action =
   | { kind: "deleteTag"; name: string }
   | { kind: "stash"; message: string | null }
   | { kind: "stashPop" }
+  | { kind: "commit"; message: string; amend: boolean; noVerify: boolean; signOff: boolean }
   | { kind: "deleteRemote"; remoteBranch: string }
   | { kind: "tag"; name: string; at: string; message: string | null }
   | { kind: "createPatch"; sha: string; path: string };
@@ -187,6 +205,13 @@ export const api = {
   fileHistory: (sha: string, path: string) => invoke<HistoryEntry[]>("file_history", { sha, path }),
   treeFiles: (sha: string) => invoke<string[]>("tree_files", { sha }),
   runAction: (action: Action) => invoke<ActionResult>("run_action", { action }),
+  wipStatus: () => invoke<WorkTree>("wip_status"),
+  wipStage: (paths: string[] | null) => invoke<WorkTree>("wip_stage", { paths }),
+  wipUnstage: (paths: string[] | null) => invoke<WorkTree>("wip_unstage", { paths }),
+  wipDiscard: (files: WipFile[] | null) => invoke<WorkTree>("wip_discard", { files }),
+  wipFileDiff: (file: WipFile, staged: boolean, ignoreWhitespace = false) =>
+    invoke<string>("wip_file_diff", { file, staged, ignoreWhitespace }),
+  wipFileVersions: (file: WipFile, staged: boolean) => invoke<FileVersions>("wip_file_versions", { file, staged }),
   openTerminal: (app: string | null) => invoke<void>("open_terminal", { app }),
   launchPath: () => invoke<string | null>("launch_path"),
   markSeen: (names?: string[]) => invoke<RefChange[]>("mark_seen", { names: names ?? null }),

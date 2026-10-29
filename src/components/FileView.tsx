@@ -42,6 +42,7 @@ export function FileView() {
           <span className="fv-name">{name}</span>
         </span>
         <span className="spacer" />
+        {file.wip && <WipSide file={file} />}
         <span className="muted small">{lang ?? "plain text"}</span>
         <button className="icon-btn" title="Close (Esc)" aria-label="Close file" onClick={closeFile}>
           ✕
@@ -58,10 +59,10 @@ export function FileView() {
         </div>
         <span className="spacer" />
         <div className="segmented" role="group" aria-label="More">
-          <ModeButton mode="blame" current={mode} onClick={setMode} disabled={file.status === "D"}>
+          <ModeButton mode="blame" current={mode} onClick={setMode} disabled={file.status === "D" || !!file.wip}>
             Blame
           </ModeButton>
-          <ModeButton mode="history" current={mode} onClick={setMode}>
+          <ModeButton mode="history" current={mode} onClick={setMode} disabled={!!file.wip}>
             History
           </ModeButton>
         </div>
@@ -110,6 +111,31 @@ export function FileView() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Which side of the index an uncommitted file is shown from, and a button to
+ * move it across. The view follows the file to the other side.
+ */
+function WipSide({ file }: { file: OpenFile }) {
+  const busy = useStore((s) => s.busy);
+  const { stage, unstage, openFile, closeFile } = useStore.getState();
+  const staged = file.wip!.staged;
+  const move = async () => {
+    await (staged ? unstage([file.path]) : stage([file.path]));
+    const wip = useStore.getState().wip;
+    const next = (staged ? wip?.unstaged : wip?.staged)?.find((f) => f.path === file.path);
+    if (next) openFile({ ...file, status: next.status, wip: { file: next, staged: !staged } }, "diff");
+    else closeFile();
+  };
+  return (
+    <>
+      <span className={`side-chip${staged ? " staged" : ""}`}>{staged ? "Staged" : "Unstaged"}</span>
+      <button className={`btn small ${staged ? "" : "stage-all"}`} disabled={busy} onClick={move}>
+        {staged ? "Unstage File" : "Stage File"}
+      </button>
+    </>
   );
 }
 
@@ -179,14 +205,13 @@ function useFileData(file: OpenFile, mode: FileMode, ignoreWs: boolean): Loaded 
 
   useEffect(() => {
     let live = true;
-    api
-      .fileVersions(file.sha, file.path, file.oldPath)
+    (file.wip ? api.wipFileVersions(file.wip.file, file.wip.staged) : api.fileVersions(file.sha, file.path, file.oldPath))
       .then((v) => live && setVersions(v))
       .catch((e) => live && setError(String(e)));
     return () => {
       live = false;
     };
-  }, [file.sha, file.path, file.oldPath]);
+  }, [file.sha, file.path, file.oldPath, file.wip]);
 
   useEffect(() => {
     if (file.status == null) {
@@ -195,14 +220,16 @@ function useFileData(file: OpenFile, mode: FileMode, ignoreWs: boolean): Loaded 
     }
     let live = true;
     setDiff(null);
-    api
-      .fileDiff(file.sha, file.path, file.oldPath, ignoreWs)
+    (file.wip
+      ? api.wipFileDiff(file.wip.file, file.wip.staged, ignoreWs)
+      : api.fileDiff(file.sha, file.path, file.oldPath, ignoreWs)
+    )
       .then((d) => live && setDiff(d))
       .catch((e) => live && setError(String(e)));
     return () => {
       live = false;
     };
-  }, [file.sha, file.path, file.oldPath, file.status, ignoreWs]);
+  }, [file.sha, file.path, file.oldPath, file.status, file.wip, ignoreWs]);
 
   useEffect(() => {
     if (mode !== "blame" || blame) return;
@@ -447,7 +474,7 @@ function SplitDiff({
   const side = (r: SplitRow, which: "left" | "right") => {
     if (r.kind !== "line") return null;
     const line = which === "left" ? r.left : r.right;
-    if (!line) return <div className="sd empty" style={{ width: half }} />;
+    if (!line) return <div className="sd blank" style={{ width: half }} />;
     const num = which === "left" ? (line as { old: number }).old : (line as { new: number }).new;
     const runs = which === "left" ? runsFor(oldLines, num, line.text) : runsFor(newLines, num, line.text);
     const kind = line.kind;

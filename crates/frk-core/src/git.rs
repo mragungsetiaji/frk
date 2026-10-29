@@ -89,6 +89,21 @@ impl Repo {
             .then(|| String::from_utf8_lossy(&out.stdout).into_owned()))
     }
 
+    /// Like `run`, but also accepts the given non-zero exit codes, for commands
+    /// such as `diff --no-index` that use 1 to mean "there were differences".
+    pub fn run_allowing<I, S>(&self, args: I, ok: &[i32]) -> Result<String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let args = collect(args);
+        let out = self.command(&args).output()?;
+        if out.status.code().is_some_and(|c| ok.contains(&c)) {
+            return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+        }
+        check(&args, out)
+    }
+
     /// Runs git with `input` on stdin. Used to hand `git log --stdin` hundreds of
     /// tips without running into the Windows command-line length limit.
     pub fn run_with_stdin<I, S>(&self, args: I, input: &str) -> Result<String>
@@ -158,6 +173,14 @@ fn check(args: &[OsString], out: Output) -> Result<String> {
             .map(|a| a.to_string_lossy())
             .collect::<Vec<_>>()
             .join(" "),
-        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        // Some failures ("nothing to commit") are reported on stdout only.
+        stderr: {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            if err.is_empty() {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            } else {
+                err
+            }
+        },
     })
 }

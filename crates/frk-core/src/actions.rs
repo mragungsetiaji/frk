@@ -101,6 +101,16 @@ pub enum Action {
     },
     /// Applies the newest stash and drops it.
     StashPop,
+    /// Commits what is staged, or with `amend` replaces HEAD (with whatever is
+    /// staged added to it).
+    Commit {
+        message: String,
+        amend: bool,
+        #[serde(default)]
+        no_verify: bool,
+        #[serde(default)]
+        sign_off: bool,
+    },
     /// Writes `git format-patch` output for one commit to `path`.
     CreatePatch {
         sha: String,
@@ -303,6 +313,33 @@ pub fn run(repo: &Repo, action: &Action) -> Result<String> {
                 return Err(invalid("there are no local changes to stash"));
             }
             Ok("Stashed local changes".into())
+        }
+        Action::Commit {
+            message,
+            amend,
+            no_verify,
+            sign_off,
+        } => {
+            if message.trim().is_empty() {
+                return Err(invalid("the commit message is empty"));
+            }
+            let mut args = vec!["commit", "--file=-"];
+            if *amend {
+                args.push("--amend");
+            }
+            if *no_verify {
+                args.push("--no-verify");
+            }
+            if *sign_off {
+                args.push("--signoff");
+            }
+            repo.run_with_stdin(args, message)?;
+            let sha = repo.run(["rev-parse", "--short", "HEAD"])?;
+            Ok(format!(
+                "{} {}",
+                if *amend { "Amended" } else { "Committed" },
+                sha.trim()
+            ))
         }
         Action::StashPop => {
             repo.run(["stash", "pop"])?;
@@ -663,6 +700,79 @@ mod tests {
             },
         );
         run_ok(&repo, Action::DeleteTag { name: "t1".into() });
+    }
+
+    #[test]
+    fn worktree_stage_unstage_discard() {
+        use crate::worktree;
+        let (d, repo) = scratch();
+        std::fs::write(d.path().join("f"), "changed").unwrap();
+        std::fs::write(d.path().join("-new"), "hello\n").unwrap();
+        let wt = worktree::status(&repo).unwrap();
+        assert_eq!(wt.unstaged.len(), 2);
+        let untracked = wt.unstaged.iter().find(|f| f.untracked).unwrap().clone();
+        assert_eq!(untracked.path, "-new");
+        let diff = worktree::file_diff(&repo, &untracked, false, false).unwrap();
+        assert!(diff.contains("+hello"), "{diff}");
+        let v = worktree::file_versions(&repo, &untracked, false).unwrap();
+        assert_eq!((v.old, v.new.as_deref()), (None, Some("hello\n")));
+
+        worktree::stage(&repo, &["f".into(), "-new".into()]).unwrap();
+        let wt = worktree::status(&repo).unwrap();
+        assert_eq!((wt.unstaged.len(), wt.staged.len()), (0, 2));
+        let staged_f = wt.staged.iter().find(|f| f.path == "f").unwrap();
+        assert!(
+            worktree::file_diff(&repo, staged_f, true, false)
+                .unwrap()
+                .contains("+changed")
+        );
+
+        worktree::unstage(&repo, &["-new".into()]).unwrap();
+        let wt = worktree::status(&repo).unwrap();
+        assert_eq!((wt.unstaged.len(), wt.staged.len()), (1, 1));
+
+        worktree::discard(&repo, &wt.unstaged).unwrap();
+        assert!(!d.path().join("-new").exists());
+        worktree::discard_all(&repo).unwrap();
+        assert!(worktree::status(&repo).unwrap().is_clean());
+        assert_eq!(std::fs::read_to_string(d.path().join("f")).unwrap(), "two");
+    }
+
+    #[test]
+    fn commit_and_amend() {
+        let (d, repo) = scratch();
+        let commit = |amend| Action::Commit {
+            message: "three\n\nbody".into(),
+            amend,
+            no_verify: false,
+            sign_off: false,
+        };
+        let err = run(&repo, &commit(false)).unwrap_err().to_string();
+        assert!(err.contains("nothing"), "{err}");
+        std::fs::write(d.path().join("f"), "three").unwrap();
+        crate::worktree::stage(&repo, &["f".into()]).unwrap();
+        run_ok(&repo, commit(false));
+        assert_eq!(
+            repo.run(["log", "-1", "--format=%s"]).unwrap().trim(),
+            "three"
+        );
+        let count = || repo.run(["rev-list", "--count", "HEAD"]).unwrap();
+        let before = count();
+        run_ok(
+            &repo,
+            Action::Commit {
+                message: "three, amended".into(),
+                amend: true,
+                no_verify: true,
+                sign_off: true,
+            },
+        );
+        assert_eq!(count(), before);
+        assert!(
+            repo.run(["log", "-1", "--format=%B"])
+                .unwrap()
+                .contains("Signed-off-by: t <t@t>")
+        );
     }
 
     #[test]

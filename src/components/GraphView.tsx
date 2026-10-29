@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
-import { RefChange, RefInfo, Row } from "../api";
+import { RefChange, RefInfo, Row, WIP } from "../api";
 import { autoGraphWidth, drawGraph, isMergeDot, laneX, NODE_R, ROW_H } from "../graph/draw";
 import { RowCache } from "../graph/rowCache";
 import { useStore } from "../store";
@@ -246,7 +246,9 @@ function RowCells({
   // GitKraken marks where the relative time changes, on the last row of each
   // bucket, rather than repeating a date on every row.
   const when = timeAgo(row.time);
-  const showWhen = isLast || (next !== undefined && timeAgo(next.time) !== when);
+  const showWhen = row.sha !== WIP && (isLast || (next !== undefined && timeAgo(next.time) !== when));
+
+  if (row.sha === WIP) return <WipCells color={color} />;
 
   return (
     <>
@@ -381,6 +383,23 @@ function RefLabels({
           +{rest.length}
         </span>
       )}
+    </>
+  );
+}
+
+function WipCells({ color }: { color: string }) {
+  const work = useStore((s) => s.repo?.work);
+  const n = work?.dirty ?? 0;
+  return (
+    <>
+      <span className="labels" />
+      <span />
+      <span className="message wip-message" style={{ borderLeftColor: color }}>
+        <span className="subject">// WIP</span>
+        <span className="wip-count small">
+          ✎ {n} file{n === 1 ? "" : "s"}
+        </span>
+      </span>
     </>
   );
 }

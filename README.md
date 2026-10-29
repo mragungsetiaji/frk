@@ -80,6 +80,22 @@ The commit panel lists files as paths or as a collapsible tree, and "View all
 files" shows the commit's whole tree. Every long list (diff lines, file, blame)
 is virtualized.
 
+## Committing
+
+Uncommitted work shows as a dashed `// WIP` row above HEAD. Selecting it opens
+the commit panel: unstaged and staged files (as paths or a tree), Stage /
+Unstage per file or all at once, discard per file or everything (with a
+confirmation; untracked files are deleted), and the commit form — a summary
+with the 72-character count, a description, amend (prefilled with the message
+being replaced), and options to skip hooks or add a sign-off. ⌘↩ commits.
+Clicking a file opens its working-tree diff in the file view, with a button
+to move it across the index. A commit or an amend can be undone from the
+toolbar (soft reset to the previous HEAD).
+
+Staging runs straight against git without reloading the graph; only the
+commit, which moves HEAD, does. Paths reach git through
+`--pathspec-from-file`, never the command line.
+
 ## Toolbar
 
 Repository tabs sit in the title bar (macOS overlay title bar; the system title

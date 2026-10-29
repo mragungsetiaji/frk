@@ -10,6 +10,7 @@ use frk_core::file::{self, Blame, FileVersions, HistoryEntry};
 use frk_core::graph::{self, Graph, Row};
 use frk_core::refs::{self, Head, RefInfo, RefKind, Remote, WorkStatus};
 use frk_core::snapshot::{self, RefChange, Snapshot};
+use frk_core::worktree::{self, WIP, WipFile, WorkTree};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -206,17 +207,41 @@ async fn fetch_all(app: AppHandle) -> CmdResult<()> {
 
 #[tauri::command]
 async fn build_graph(app: AppHandle, filter: GraphFilter) -> CmdResult<GraphMeta> {
-    let (repo, visible, head) = {
+    let (repo, visible, head, dirty) = {
         let st = app.state::<AppState>();
         let guard = st.0.lock().unwrap();
         let s = guard.as_ref().ok_or("no repository open")?;
-        (s.repo.clone(), visible_refs(s, &filter), s.head.sha.clone())
+        (
+            s.repo.clone(),
+            visible_refs(s, &filter),
+            s.head.sha.clone(),
+            s.work.dirty > 0,
+        )
     };
     let tips: Vec<String> = visible.iter().map(|(_, sha)| sha.clone()).collect();
     let max = filter.max_commits.max(1);
     let mut g = blocking(move || {
-        let commits = graph::load_commits(&repo, &tips, max).map_err(err)?;
-        Ok(graph::layout(commits, head.as_deref()))
+        let mut commits = graph::load_commits(&repo, &tips, max).map_err(err)?;
+        // Uncommitted work is drawn as a child of HEAD at the very top, and
+        // counts as HEAD's history so it is lit like the rest of the branch.
+        let wip = match (&head, dirty) {
+            (Some(h), true) => {
+                commits.insert(
+                    0,
+                    graph::Commit {
+                        sha: WIP.into(),
+                        parents: vec![h.clone()],
+                        author: String::new(),
+                        email: String::new(),
+                        time: now(),
+                        subject: "// WIP".into(),
+                    },
+                );
+                Some(WIP)
+            }
+            _ => None,
+        };
+        Ok(graph::layout(commits, wip.or(head.as_deref())))
     })
     .await?;
     g.label(visible.iter().map(|(n, sha)| (n.as_str(), sha.as_str())));
@@ -399,6 +424,88 @@ async fn run_action(app: AppHandle, action: Action) -> CmdResult<ActionResult> {
     Ok(ActionResult { message, repo })
 }
 
+/// Re-reads the working tree and keeps the session's dirty count in step, so
+/// the next graph build shows or drops the WIP row.
+fn worktree_after(app: &AppHandle, repo: &Repo) -> CmdResult<WorkTree> {
+    let wt = worktree::status(repo).map_err(err)?;
+    let st = app.state::<AppState>();
+    if let Some(s) = st.0.lock().unwrap().as_mut() {
+        s.work.dirty = (wt.unstaged.len() + wt.staged.len() + wt.conflicted.len()) as u32;
+    }
+    Ok(wt)
+}
+
+#[tauri::command]
+async fn wip_status(app: AppHandle) -> CmdResult<WorkTree> {
+    let repo = current_repo(&app)?;
+    let handle = app.clone();
+    blocking(move || worktree_after(&handle, &repo)).await
+}
+
+#[tauri::command]
+async fn wip_stage(app: AppHandle, paths: Option<Vec<String>>) -> CmdResult<WorkTree> {
+    let repo = current_repo(&app)?;
+    let handle = app.clone();
+    blocking(move || {
+        match paths {
+            Some(p) => worktree::stage(&repo, &p),
+            None => worktree::stage_all(&repo),
+        }
+        .map_err(err)?;
+        worktree_after(&handle, &repo)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn wip_unstage(app: AppHandle, paths: Option<Vec<String>>) -> CmdResult<WorkTree> {
+    let repo = current_repo(&app)?;
+    let handle = app.clone();
+    blocking(move || {
+        match paths {
+            Some(p) => worktree::unstage(&repo, &p),
+            None => worktree::unstage_all(&repo),
+        }
+        .map_err(err)?;
+        worktree_after(&handle, &repo)
+    })
+    .await
+}
+
+/// `files: None` discards everything, staged or not.
+#[tauri::command]
+async fn wip_discard(app: AppHandle, files: Option<Vec<WipFile>>) -> CmdResult<WorkTree> {
+    let repo = current_repo(&app)?;
+    let handle = app.clone();
+    blocking(move || {
+        match files {
+            Some(f) => worktree::discard(&repo, &f),
+            None => worktree::discard_all(&repo),
+        }
+        .map_err(err)?;
+        worktree_after(&handle, &repo)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn wip_file_diff(
+    app: AppHandle,
+    file: WipFile,
+    staged: bool,
+    ignore_whitespace: bool,
+) -> CmdResult<String> {
+    let repo = current_repo(&app)?;
+    blocking(move || worktree::file_diff(&repo, &file, staged, ignore_whitespace).map_err(err))
+        .await
+}
+
+#[tauri::command]
+async fn wip_file_versions(app: AppHandle, file: WipFile, staged: bool) -> CmdResult<FileVersions> {
+    let repo = current_repo(&app)?;
+    blocking(move || worktree::file_versions(&repo, &file, staged).map_err(err)).await
+}
+
 /// Opens a terminal in the repository. `app` is the user's choice from
 /// settings: an application name on macOS (`open -a`), a program on Windows
 /// and Linux. Without one, the platform's usual terminal.
@@ -493,7 +600,13 @@ pub fn run() {
             blame,
             file_history,
             tree_files,
-            open_terminal
+            open_terminal,
+            wip_status,
+            wip_stage,
+            wip_unstage,
+            wip_discard,
+            wip_file_diff,
+            wip_file_versions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

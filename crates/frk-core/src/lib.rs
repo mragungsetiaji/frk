@@ -15,5 +15,6 @@ pub mod git;
 pub mod graph;
 pub mod refs;
 pub mod snapshot;
+pub mod worktree;
 
 pub use git::{Error, Repo, Result};

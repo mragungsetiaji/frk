@@ -1,4 +1,4 @@
-import { Row } from "../api";
+import { Row, WIP } from "../api";
 import { initials, laneColor, personColor } from "../util";
 import { RowCache } from "./rowCache";
 
@@ -138,7 +138,18 @@ export function drawGraph(
       ctx.fillStyle = color + "40";
       ctx.fill();
     }
-    if (isMergeDot(row)) {
+    if (row.sha === WIP) {
+      // Uncommitted work: a hollow, dashed node.
+      ctx.beginPath();
+      ctx.arc(x, cy, NODE_R - 1, 0, Math.PI * 2);
+      ctx.fillStyle = "#1b1e24";
+      ctx.fill();
+      ctx.setLineDash([3, 2.5]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (isMergeDot(row)) {
       ctx.beginPath();
       ctx.arc(x, cy, MERGE_R, 0, Math.PI * 2);
       ctx.fillStyle = color;
