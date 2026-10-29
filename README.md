@@ -1,159 +1,140 @@
+<div align="center">
+
 # frk
 
-A desktop git graph that shows every branch at once, and what changed since you
-last looked. Built for staying aware of the work other people push: new
-branches, branches that moved, and force-pushes show up in a "since last seen"
-panel until you acknowledge them.
+**Every branch in one graph — and what changed since you last looked.**
 
-Tauri v2 (system webview, no bundled Chromium) + React, with the git read model
-in a separate Rust crate.
+A fast, lightweight desktop Git client for teams that push a lot of branches.
 
-```
-crates/frk-core   refs, commit walk + lane layout, snapshot diff, commit detail
-src-tauri         Tauri commands over frk-core; per-repo session state
-src               React UI: graph (canvas + virtual list), sidebar, commit panel
-```
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](#install)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
+[![Rust](https://img.shields.io/badge/Rust-1.99-B7410E?logo=rust&logoColor=white)](rust-toolchain.toml)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](package.json)
+[![Status](https://img.shields.io/badge/status-early-orange)](#roadmap)
 
-## How it stays light
+<br />
 
-- Lane layout runs once per filter change, in Rust. The UI asks for rows by
-  index range and only the rows on screen exist in the DOM.
-- The graph column is one `<canvas>` the size of the viewport, repainted on
-  scroll from the visible rows only; React never re-renders on scroll.
-- Merged and inactive branches are filtered out of the walk by default
-  (active within 30 days, hide merged), so a repository with hundreds of refs
-  draws a dozen lanes rather than hundreds.
-- All git access goes through the git CLI, so your config, credential helpers,
-  SSH agent and `commit-graph` file apply as they do in a terminal.
+<img src="docs/screenshot.png" alt="frk open on the temporalio/temporal repository: 52 active branches drawn as lanes in one graph with main highlighted, the branch list and filters on the left, and the selected commit’s message and changed files on the right" width="100%" />
 
-On `cekat-data-platform` (432 refs, 1.4k commits): ref listing ~110 ms, commit
-walk ~50–100 ms, lane layout < 1 ms; the app's core process sits around 60 MB.
+</div>
 
-## "Since last seen"
+## Why frk
 
-On first open, every branch is recorded as seen (`<app data>/snapshots/`).
-After that, any branch that is new, moved, force-pushed or deleted is listed
-with its commit count and authors, and stays listed until you mark it seen. A
-fetch alone never clears it. Changed branches are always drawn in the graph,
-even when old or merged.
+Most Git clients are built around *your* branch. On a busy repository the work
+that matters is often someone else's: a branch that appeared overnight, a
+colleague's force-push, a fix that landed on `main` while you were heads-down.
 
-## The checked-out branch reads first
+frk draws **every active branch at once**, keeps a **“since last seen” list**
+of what moved until you acknowledge it, and lights up **the branch you are on**
+so it never gets lost in the crowd. It does this in a ~5 MB app that uses the
+system webview instead of bundling a browser.
 
-Commits in HEAD's history are drawn at full strength: bright messages, solid
-thick lines, the HEAD chip lit up. Everything else is dimmed into the
-background. The `✓ branch` pill in the top bar jumps to HEAD.
+## Features
 
-## Right-click
+**See everything**
+- 🌳 **All-branches graph**: every active branch as its own lane, author avatars
+  on the nodes, local and remote labels merged into one chip.
+- 🔦 **HEAD first**: your branch's history is drawn bright and bold, the rest
+  recedes.
+- 🎚️ **Filters that keep it readable**: active in the last 7 / 30 / 90 days,
+  hide merged, tags, solo or hide any branch.
 
-On a commit or a branch label (in the graph or the sidebar): pull
-(fast-forward only), push / push and set upstream, set upstream, checkout
-(branch, remote branch as a tracking branch, or detached), create branch,
-reset the current branch soft / mixed / hard, reword the HEAD commit, revert,
-push and open a pull request, rename, delete local or remote, copy branch name,
-sha or web links, save a patch, solo / hide, and create plain or annotated tags.
+**Stay aware**
+- 🔔 **Since last seen**: new, moved, force-pushed and deleted branches, with
+  the commits and authors that arrived, until you mark them seen.
+- 🔄 **Auto fetch** on an interval you choose; your own pushes are never
+  reported back to you as news.
 
-Each is a typed action in `crates/frk-core/src/actions.rs`, never raw git
-arguments from the UI; names go through `git check-ref-format` and commits are
-resolved to a sha first. Destructive ones ask first, and the integration
-branch cannot be deleted from here. Refs an action moves are marked seen, so
-your own push does not show up as news. Pull fetches only the one upstream
-branch it needs, so it never marks other people's work as seen.
+**Get work done**
+- ✍️ **Commit panel**: stage and unstage per file or all, discard, amend, skip
+  hooks, sign-off, ⌘↩ to commit.
+- 🖱️ **Right-click everything**: checkout, branch, reset, revert, rename,
+  delete, tag, copy links, push and open a pull request.
+- ↩️ **Undo / Redo** for checkout, branch, reset, tag, stash and commit.
+- 🗂️ **Repository tabs**, a toolbar for pull / push / stash / pop, and a
+  Terminal button.
 
-Not there yet: drop commit, move commit, apply patch, compare against the
-working tree, and rewording anything older than HEAD (all need a rebase).
+**Review**
+- 🔍 **Full-page file view**: unified or split diffs with syntax highlighting
+  and word-level changes, whole-file view, blame, and history across renames.
 
-## File view
+## Install
 
-Clicking a file in the commit panel opens it full page over the graph (Esc
-closes it and the graph is where you left it):
-
-- **Diff View**, unified or split, with syntax highlighting (Prism, whole file
-  highlighted once so multi-line comments and strings colour correctly),
-  word-level change marks within edited lines, ↑/↓ between changes, and a ¶
-  toggle that hides whitespace-only changes (`git diff -w`).
-- **File View**: the whole file at that commit, with this commit's added lines
-  marked.
-- **Blame** and **History** (follows renames); clicking an entry opens that
-  commit's version.
-
-The commit panel lists files as paths or as a collapsible tree, and "View all
-files" shows the commit's whole tree. Every long list (diff lines, file, blame)
-is virtualized.
-
-## Committing
-
-Uncommitted work shows as a dashed `// WIP` row above HEAD. Selecting it opens
-the commit panel: unstaged and staged files (as paths or a tree), Stage /
-Unstage per file or all at once, discard per file or everything (with a
-confirmation; untracked files are deleted), and the commit form — a summary
-with the 72-character count, a description, amend (prefilled with the message
-being replaced), and options to skip hooks or add a sign-off. ⌘↩ commits.
-Clicking a file opens its working-tree diff in the file view, with a button
-to move it across the index. A commit or an amend can be undone from the
-toolbar (soft reset to the previous HEAD).
-
-Staging runs straight against git without reloading the graph; only the
-commit, which moves HEAD, does. Paths reach git through
-`--pathspec-from-file`, never the command line.
-
-## Toolbar
-
-Repository tabs sit in the title bar (macOS overlay title bar; the system title
-bar elsewhere). Below them: repository and branch pickers, then Undo / Redo,
-Pull (▾ for fetch all), Push, Branch, Stash, Pop and Terminal.
-
-Undo covers what can be reversed locally — checkout, create / rename / delete
-branch, reset, tag, stash — and is worked out before the action runs, from the
-state it started in. Undoing "create branch" refuses if the branch has gained
-commits since. Anything that cannot be undone (push, pull, revert, …) clears
-the history rather than leave steps that no longer apply.
-
-The footer shows fetch status; the gear opens settings for the auto-fetch
-interval and the terminal application.
-
-## Develop
-
-Requires Node 22 (`.nvmrc`; Vite 8 needs ≥ 20.19) and Rust (pinned in
-`rust-toolchain.toml`).
+frk is early and not yet published as a signed download. Build it from source
+(a few minutes):
 
 ```sh
-make install             # frontend dependencies
-make dev                 # tauri dev; REPO=~/code/some-repo opens it on launch
-make check               # rustfmt, clippy, tests, type check
-make dmg                 # release build → target/release/bundle/dmg/frk_<version>_<arch>.dmg
-make install-app         # release build copied into /Applications
+git clone https://github.com/mragungsetiaji/frk.git
+cd frk
+make install
+make dmg            # → target/release/bundle/dmg/frk_<version>_<arch>.dmg
 ```
 
-The app is signed ad hoc, which is enough to run a build made on the same
-Mac. A .dmg handed to someone else needs a Developer ID signature and
-notarization (`APPLE_*` environment variables, see Tauri's docs), or macOS
-will refuse to open it.
+Open the .dmg and drag **frk** into Applications, or run `make install-app` to
+copy it there directly. You need Rust, Node 22, pnpm and git; see
+[CONTRIBUTING.md](CONTRIBUTING.md#setup).
 
-### Faster Rust rebuilds with blaze
+> [!NOTE]
+> Local builds are signed ad hoc, which is enough on the Mac that built them.
+> frk targets Windows too, but it has not been built or tested there yet.
 
-[blaze](https://github.com/indexable-inc/blaze) rebuilds after an edit in
-milliseconds instead of seconds. It is a dev-loop tool only; release builds and
-CI stay on cargo.
+## Usage
+
+Open a repository from the folder button or the `+` tab, or pass one on launch:
 
 ```sh
-curl -fsSL https://ix.dev/blaze | sh    # macOS Apple silicon / Linux
-pnpm app:blaze                          # tauri dev --runner blaze
+make dev REPO=~/code/my-repo
 ```
 
-Things to know: blaze builds with its own pinned nightly regardless of
-`rust-toolchain.toml`, its daemon holds a few GB of memory, and on Windows it
-needs a manual install and `BLAZE_SANDBOX=off` for proc macros. Keep
-`cargo check` / `cargo test` as the final word.
+| | |
+|---|---|
+| Select a commit | click, or <kbd>↑</kbd> / <kbd>↓</kbd> in the graph |
+| Act on a commit or branch | right-click it, in the graph or the sidebar |
+| Open a file | click it in the commit panel; <kbd>Esc</kbd> closes it |
+| Commit | select the `// WIP` row, stage, write a summary, <kbd>⌘</kbd> <kbd>↩</kbd> |
+| Resize columns | drag the column edges; double-click to reset |
+| Settings | the ⚙ in the bottom-right corner |
 
-### UI in a plain browser
+## How it stays fast
 
-`pnpm dev` without Tauri answers every command from a fixture dumped from a
-real repository (`src/devMock.ts`), which is handy for UI work:
+| | |
+|---|---|
+| Lane layout | in Rust, once per filter change: under 1 ms for 1.4k commits |
+| Graph drawing | one `<canvas>`, repainted from the rows on screen only |
+| Long lists | graph, diffs, files and blame are all virtualized |
+| Git access | the git CLI: your config, credentials, hooks and `commit-graph` just work |
+| Footprint | 4.9 MB app, 2.4 MB .dmg, system webview |
 
-```sh
-pnpm fixture ../some-repo public/dev-fixture.json
-pnpm dev                 # open http://localhost:1420
-```
+The details, including how lanes are assigned and why write actions are typed
+rather than passed through, are in [docs/design.md](docs/design.md).
 
-`public/dev-fixture.json` holds real commit messages and author emails; it is
-git-ignored and should stay that way.
+## Roadmap
+
+- [x] All-branches graph, HEAD highlighting, filters
+- [x] “Since last seen” with auto fetch
+- [x] Right-click actions with undo
+- [x] File view: diff, file, blame, history
+- [x] Commit panel
+- [ ] Stage individual hunks and lines
+- [ ] Interactive rebase: drop, reorder and reword older commits
+- [ ] Merge conflict resolution
+- [ ] File-system watcher instead of refresh-on-focus
+- [ ] Signed, notarized releases; tested Windows builds
+
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
+setup, the dev loop (including a browser-only UI mode and faster rebuilds with
+[blaze](https://github.com/indexable-inc/blaze)), and what a change should look
+like.
+
+## Acknowledgements
+
+frk's look is inspired by [GitKraken](https://www.gitkraken.com). It stands on
+[Tauri](https://tauri.app), [React](https://react.dev),
+[Prism](https://prismjs.com), [TanStack Virtual](https://tanstack.com/virtual)
+and [Zustand](https://zustand.docs.pmnd.rs).
+
+## License
+
+No license has been chosen yet. Until one is, the code is all rights reserved.
