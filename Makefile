@@ -39,8 +39,11 @@ app: ## Release build of frk.app
 	$(PNPM) tauri build --bundles app
 	@echo "\n  $(BUNDLE_DIR)/macos/frk.app"
 
+# CI=true skips the Finder AppleScript that lays out the .dmg window: Finder
+# can keep the temporary image busy and fail the build, and the layout is
+# cosmetic (the Applications link is still added).
 dmg: ## Release build packaged as a .dmg installer
-	$(PNPM) tauri build --bundles dmg
+	CI=true $(PNPM) tauri build --bundles dmg
 	@echo "\n  $$(ls -t $(BUNDLE_DIR)/dmg/*.dmg | head -1)"
 
 install-app: app ## Build and copy frk.app into /Applications

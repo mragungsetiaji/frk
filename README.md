@@ -16,7 +16,7 @@ A fast, lightweight desktop Git client for teams that push a lot of branches.
 
 <br />
 
-<img src="docs/screenshot.png" alt="frk open on the temporalio/temporal repository: 52 active branches drawn as lanes in one graph with main highlighted, the branch list and filters on the left, and the selected commit’s message and changed files on the right" width="100%" />
+<img src="docs/screenshot.png" alt="frk open on the temporalio/temporal repository: active branches drawn as lanes in one graph with main and its history highlighted, the branch list and filters on the left, and the selected commit’s message and changed files on the right" width="100%" />
 
 </div>
 
@@ -53,12 +53,16 @@ system webview instead of bundling a browser.
 - 🖱️ **Right-click everything**: checkout, branch, reset, revert, rename,
   delete, tag, copy links, push and open a pull request.
 - ↩️ **Undo / Redo** for checkout, branch, reset, tag, stash and commit.
-- 🗂️ **Repository tabs**, a toolbar for pull / push / stash / pop, and a
+- 🗂️ **Repository tabs**, a toolbar for pull / push / stash / unstash, and a
   Terminal button.
 
 **Review**
 - 🔍 **Full-page file view**: unified or split diffs with syntax highlighting
   and word-level changes, whole-file view, blame, and history across renames.
+
+<p align="center">
+  <img src="docs/screenshot-diff.png" alt="frk’s file view: a syntax-highlighted unified diff of a Go test file from temporalio/temporal, with Diff, File, Blame and History tabs above it and the commit’s changed files listed on the right" width="100%" />
+</p>
 
 ## Install
 
@@ -93,7 +97,7 @@ make dev REPO=~/code/my-repo
 | Select a commit | click, or <kbd>↑</kbd> / <kbd>↓</kbd> in the graph |
 | Act on a commit or branch | right-click it, in the graph or the sidebar |
 | Open a file | click it in the commit panel; <kbd>Esc</kbd> closes it |
-| Commit | select the `// WIP` row, stage, write a summary, <kbd>⌘</kbd> <kbd>↩</kbd> |
+| Commit | select the **Uncommitted changes** row, stage, write a summary, <kbd>⌘</kbd> <kbd>↩</kbd> |
 | Resize columns | drag the column edges; double-click to reset |
 | Settings | the ⚙ in the bottom-right corner |
 

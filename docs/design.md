@@ -11,7 +11,7 @@ crates/frk-core   everything that talks to git: refs, the commit walk and lane
 src-tauri         Tauri commands over frk-core, holding one session per
                   window; git work runs off the main thread
 src               React UI: the graph (canvas + virtual list), sidebar,
-                  commit / WIP panels, file view, toolbar
+                  commit and working-tree panels, file view, toolbar
 ```
 
 All git access goes through the git CLI rather than a library binding, so the
