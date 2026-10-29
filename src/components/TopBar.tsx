@@ -2,7 +2,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
-import { FolderIcon } from "./Icons";
 
 /**
  * macOS draws the traffic lights over our content (the window uses an overlay
@@ -37,9 +36,6 @@ function TabStrip() {
 
   return (
     <div className={`tabstrip${IS_MAC ? " mac" : ""}`} data-tauri-drag-region>
-      <button className="strip-btn" title="Open repository" aria-label="Open repository" onClick={pickRepo}>
-        <FolderIcon />
-      </button>
       {tabs.map((root) => (
         <div key={root} className={`repo-tab${root === active ? " on" : ""}`} title={root}>
           <button className="repo-tab-main" onClick={() => root !== active && !loading && openRepo(root)}>
@@ -101,61 +97,69 @@ function Toolbar() {
         <BranchPicker />
       </div>
       <div className="tb-center">
-        <ToolButton
-          label="Undo"
-          title={lastUndo ? `Undo ${lastUndo.label}` : "Nothing to undo"}
-          disabled={disabled || !lastUndo}
-          onClick={() => st().undo()}
-          icon={<UndoIcon />}
-        />
-        <ToolButton
-          label="Redo"
-          title={lastRedo ? `Redo ${lastRedo.label}` : "Nothing to redo"}
-          disabled={disabled || !lastRedo}
-          onClick={() => st().redo()}
-          icon={<UndoIcon redo />}
-        />
-        <PullButton disabled={disabled} canPull={!!headRef?.upstream} branch={head.branch} />
-        <ToolButton
-          label="Push"
-          title={
-            head.branch
-              ? `Push ${head.branch}${headRef?.upstream ? ` to ${headRef.upstream}` : " and set its upstream"}`
-              : "HEAD is detached"
-          }
-          disabled={disabled || !head.branch}
-          onClick={() => head.branch && st().runAction({ kind: "push", branch: head.branch })}
-          icon={<PushIcon />}
-        />
-        <ToolButton
-          label="Branch"
-          title="Create a branch at HEAD"
-          disabled={disabled || !head.sha}
-          onClick={createBranch}
-          icon={<BranchIcon />}
-        />
-        <ToolButton
-          label="Stash"
-          title={
-            repo.work.dirty > 0
-              ? `Stash ${repo.work.dirty} changed file${repo.work.dirty === 1 ? "" : "s"}`
-              : "No local changes"
-          }
-          disabled={disabled || repo.work.dirty === 0}
-          onClick={() => st().runAction({ kind: "stash", message: null })}
-          icon={<StashIcon />}
-        />
-        <ToolButton
-          label="Pop"
-          title={
-            repo.work.stashes > 0
-              ? `Apply and drop the latest of ${repo.work.stashes} stash${repo.work.stashes === 1 ? "" : "es"}`
-              : "No stashes"
-          }
-          disabled={disabled || repo.work.stashes === 0}
-          onClick={() => st().runAction({ kind: "stashPop" })}
-          icon={<StashIcon pop />}
-        />
+        <div className="tool-group">
+          <ToolButton
+            iconOnly
+            label="Undo"
+            title={lastUndo ? `Undo ${lastUndo.label}` : "Nothing to undo"}
+            disabled={disabled || !lastUndo}
+            onClick={() => st().undo()}
+            icon={<UndoIcon />}
+          />
+          <ToolButton
+            iconOnly
+            label="Redo"
+            title={lastRedo ? `Redo ${lastRedo.label}` : "Nothing to redo"}
+            disabled={disabled || !lastRedo}
+            onClick={() => st().redo()}
+            icon={<UndoIcon redo />}
+          />
+        </div>
+        <div className="tool-group">
+          <PullButton disabled={disabled} canPull={!!headRef?.upstream} branch={head.branch} />
+          <ToolButton
+            label="Push"
+            title={
+              head.branch
+                ? `Push ${head.branch}${headRef?.upstream ? ` to ${headRef.upstream}` : " and set its upstream"}`
+                : "HEAD is detached"
+            }
+            disabled={disabled || !head.branch}
+            onClick={() => head.branch && st().runAction({ kind: "push", branch: head.branch })}
+            icon={<PushIcon />}
+          />
+        </div>
+        <div className="tool-group">
+          <ToolButton
+            label="Branch"
+            title="Create a branch at HEAD"
+            disabled={disabled || !head.sha}
+            onClick={createBranch}
+            icon={<BranchIcon />}
+          />
+          <ToolButton
+            label="Stash"
+            title={
+              repo.work.dirty > 0
+                ? `Stash ${repo.work.dirty} changed file${repo.work.dirty === 1 ? "" : "s"}`
+                : "No local changes"
+            }
+            disabled={disabled || repo.work.dirty === 0}
+            onClick={() => st().runAction({ kind: "stash", message: null })}
+            icon={<StashIcon />}
+          />
+          <ToolButton
+            label="Unstash"
+            title={
+              repo.work.stashes > 0
+                ? `Apply and drop the latest of ${repo.work.stashes} stash${repo.work.stashes === 1 ? "" : "es"}`
+                : "No stashes"
+            }
+            disabled={disabled || repo.work.stashes === 0}
+            onClick={() => st().runAction({ kind: "stashPop" })}
+            icon={<StashIcon pop />}
+          />
+        </div>
       </div>
       <div className="tb-right">
         <span className="tool-divider" />
@@ -176,17 +180,25 @@ function ToolButton({
   icon,
   onClick,
   disabled,
+  iconOnly,
 }: {
   label: string;
   title: string;
   icon: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  iconOnly?: boolean;
 }) {
   return (
-    <button className="tool" title={title} disabled={disabled} onClick={onClick}>
-      <span className="tool-label">{label}</span>
+    <button
+      className={`tool${iconOnly ? " icon-only" : ""}`}
+      title={title}
+      aria-label={iconOnly ? label : undefined}
+      disabled={disabled}
+      onClick={onClick}
+    >
       {icon}
+      {!iconOnly && <span className="tool-label">{label}</span>}
     </button>
   );
 }
@@ -386,8 +398,8 @@ function Popover({
 }
 
 const svg = {
-  width: 20,
-  height: 20,
+  width: 17,
+  height: 17,
   viewBox: "0 0 20 20",
   fill: "none",
   stroke: "currentColor",

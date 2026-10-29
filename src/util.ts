@@ -1,16 +1,20 @@
+/** The app background, for canvas drawing that cannot read CSS variables. */
+export const SURFACE = "#131418";
+
+/** Lane colours, starting warm so the first (usually HEAD's) lane matches the accent. */
 export const LANE_COLORS = [
-  "#3fb6e8",
-  "#b45be0",
-  "#ef5d50",
-  "#f2c03c",
-  "#5cc46a",
-  "#2fc6c0",
-  "#e8578f",
-  "#f29a3c",
-  "#9ccc55",
-  "#8a6cf0",
-  "#4a8ef0",
-  "#d6d84a",
+  "#f2a93b",
+  "#3ec7b0",
+  "#ef6f6c",
+  "#6aa9f4",
+  "#a5d65a",
+  "#b48cf5",
+  "#f07fb0",
+  "#d9c27a",
+  "#5fd39a",
+  "#8a93f0",
+  "#f58a4b",
+  "#4fc3dc",
 ];
 
 export function laneColor(i: number): string {

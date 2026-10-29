@@ -50,15 +50,12 @@ export function FileView() {
       </header>
       <div className="fv-toolbar">
         <div className="segmented" role="group" aria-label="View">
-          <ModeButton mode="file" current={mode} onClick={setMode}>
-            File View
-          </ModeButton>
           <ModeButton mode="diff" current={mode} onClick={setMode} disabled={!hasDiff}>
-            Diff View
+            Diff
           </ModeButton>
-        </div>
-        <span className="spacer" />
-        <div className="segmented" role="group" aria-label="More">
+          <ModeButton mode="file" current={mode} onClick={setMode}>
+            File
+          </ModeButton>
           <ModeButton mode="blame" current={mode} onClick={setMode} disabled={file.status === "D" || !!file.wip}>
             Blame
           </ModeButton>
@@ -66,6 +63,7 @@ export function FileView() {
             History
           </ModeButton>
         </div>
+        <span className="spacer" />
         {mode === "diff" && (
           <>
             <div className="segmented" role="group" aria-label="Changes">
@@ -92,14 +90,14 @@ export function FileView() {
                 <SplitIcon />
               </button>
             </div>
-            <button
-              className={`btn ws-toggle${prefs.ignoreWhitespace ? " on" : ""}`}
-              title={prefs.ignoreWhitespace ? "Whitespace changes hidden" : "Hide whitespace changes"}
-              aria-pressed={prefs.ignoreWhitespace}
-              onClick={() => setPrefs({ ignoreWhitespace: !prefs.ignoreWhitespace })}
-            >
-              ¶
-            </button>
+            <label className="check small">
+              <input
+                type="checkbox"
+                checked={prefs.ignoreWhitespace}
+                onChange={(e) => setPrefs({ ignoreWhitespace: e.target.checked })}
+              />
+              Ignore whitespace
+            </label>
           </>
         )}
       </div>

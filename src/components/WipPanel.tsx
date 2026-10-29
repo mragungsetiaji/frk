@@ -15,7 +15,6 @@ export function WipPanel() {
   const wip = useStore((s) => s.wip);
   const repo = useStore((s) => s.repo);
   const loadWip = useStore((s) => s.loadWip);
-  const busy = useStore((s) => s.busy);
 
   useEffect(() => {
     loadWip();
@@ -38,28 +37,10 @@ export function WipPanel() {
   return (
     <aside className="detail wip-panel">
       <div className="wip-head">
-        <button
-          className="icon-btn danger-btn"
-          title="Discard all changes"
-          aria-label="Discard all changes"
-          disabled={busy || total === 0}
-          onClick={discardAll}
-        >
-          <TrashIcon />
-        </button>
+        {branch ? <span className="branch-chip">{branch}</span> : <span className="muted">detached HEAD</span>}
         <span className="wip-title">
-          {total} file change{total === 1 ? "" : "s"} on{" "}
-          {branch ? <span className="branch-chip">{branch}</span> : <span className="muted">detached HEAD</span>}
+          {total} changed file{total === 1 ? "" : "s"}
         </span>
-        <button
-          className="icon-btn"
-          title="Stash all changes"
-          aria-label="Stash all changes"
-          disabled={busy || total === 0}
-          onClick={() => useStore.getState().runAction({ kind: "stash", message: null })}
-        >
-          <StashGlyph />
-        </button>
       </div>
       <div className="files-tools small">
         <span className="spacer" />
@@ -80,15 +61,25 @@ export function WipPanel() {
             </ul>
           </div>
         )}
-        <Section title="Unstaged Files" files={wip.unstaged} staged={false} />
-        <Section title="Staged Files" files={wip.staged} staged />
+        <Section title="Changes" files={wip.unstaged} staged={false} onDiscardAll={discardAll} />
+        <Section title="Staged" files={wip.staged} staged />
       </div>
       <CommitForm stagedCount={wip.staged.length} unstagedCount={wip.unstaged.length} />
     </aside>
   );
 }
 
-function Section({ title, files, staged }: { title: string; files: WipFile[]; staged: boolean }) {
+function Section({
+  title,
+  files,
+  staged,
+  onDiscardAll,
+}: {
+  title: string;
+  files: WipFile[];
+  staged: boolean;
+  onDiscardAll?: () => void;
+}) {
   const [open, setOpen] = useState(true);
   const layout = useStore((s) => s.filePrefs.fileList);
   const openFile = useStore((s) => s.openFile);
@@ -118,22 +109,31 @@ function Section({ title, files, staged }: { title: string; files: WipFile[]; st
       <div className="wip-section-head">
         <button className="wip-section-title" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="caret">{open ? "▾" : "▸"}</span>
-          {title} ({files.length})
+          {title} <span className="count">{files.length}</span>
         </button>
         {files.length > 0 && (
-          <button
-            className={`btn small ${staged ? "" : "stage-all"}`}
-            disabled={busy}
-            onClick={() => (staged ? unstage(null) : stage(null))}
-          >
-            {staged ? "Unstage All Changes" : "Stage All Changes"}
-          </button>
+          <span className="wip-section-actions">
+            {onDiscardAll && (
+              <button className="link danger-link small" disabled={busy} onClick={onDiscardAll}>
+                Discard all
+              </button>
+            )}
+            <button
+              className={`btn small ${staged ? "" : "stage-all"}`}
+              disabled={busy}
+              onClick={() => (staged ? unstage(null) : stage(null))}
+            >
+              {staged ? "Unstage all" : "Stage all"}
+            </button>
+          </span>
         )}
       </div>
       {open && (
         <div className="wip-section-body">
           {files.length === 0 ? (
-            <p className="muted small wip-empty">{staged ? "Nothing staged yet." : "No unstaged changes."}</p>
+            <p className="muted small wip-empty">
+              {staged ? "Stage files to include them in the next commit." : "Everything is staged."}
+            </p>
           ) : (
             <FileTree
               entries={entries}
@@ -193,10 +193,12 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
   const remaining = SUMMARY_LIMIT - draft.summary.length;
   const canCommit = !busy && draft.summary.trim().length > 0 && (stagedCount > 0 || draft.amend);
 
+  const branch = useStore((s) => s.repo?.head.branch);
   let label: string;
-  if (draft.amend) label = "Amend Previous Commit";
-  else if (stagedCount > 0) label = `Commit changes to ${stagedCount} file${stagedCount === 1 ? "" : "s"}`;
-  else label = "Stage Changes to Commit";
+  if (draft.amend) label = "Amend last commit";
+  else if (stagedCount > 0)
+    label = `Commit ${stagedCount} file${stagedCount === 1 ? "" : "s"}${branch ? ` to ${branch}` : ""}`;
+  else label = "Nothing staged";
 
   const submit = () => {
     if (canCommit) commit();
@@ -206,30 +208,23 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
     <div className="commit-form">
       <div className="commit-tabs" role="tablist">
         <button role="tab" aria-selected={tab === "commit"} className={tab === "commit" ? "on" : ""} onClick={() => setTab("commit")}>
-          <CommitGlyph /> Commit
+          Commit
         </button>
-        <button
-          role="tab"
-          aria-selected={tab === "stash"}
-          aria-label="Stash"
-          title="Stash"
-          className={tab === "stash" ? "on" : ""}
-          onClick={() => setTab("stash")}
-        >
-          <StashGlyph />
+        <button role="tab" aria-selected={tab === "stash"} className={tab === "stash" ? "on" : ""} onClick={() => setTab("stash")}>
+          Stash
         </button>
       </div>
       {tab === "commit" ? (
         <>
           <label className="check amend">
             <input type="checkbox" checked={draft.amend} disabled={!headSha} onChange={(e) => toggleAmend(e.target.checked)} />
-            Amend previous commit
+            Amend last commit
           </label>
           <div className="message-box">
             <div className="summary-row">
               <input
                 className="summary"
-                placeholder="Commit summary"
+                placeholder="Summary"
                 value={draft.summary}
                 onChange={(e) => setDraft({ summary: e.target.value })}
                 onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === "Enter" && submit()}
@@ -241,7 +236,7 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
             </div>
             <textarea
               className="description"
-              placeholder="Description"
+              placeholder="Details (optional)"
               value={draft.description}
               onChange={(e) => setDraft({ description: e.target.value })}
               onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === "Enter" && submit()}
@@ -249,7 +244,7 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
             />
           </div>
           <button className="options-toggle" aria-expanded={options} onClick={() => setOptions((o) => !o)}>
-            <span className="caret">{options ? "▾" : "›"}</span> Commit options
+            <span className="caret">{options ? "▾" : "›"}</span> More options
           </button>
           {options && (
             <div className="commit-options">
@@ -296,7 +291,7 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
               if (await runAction({ kind: "stash", message: stashMessage.trim() || null })) setStashMessage("");
             }}
           >
-            <StashGlyph /> Stash all changes
+            Stash all changes
           </button>
         </>
       )}
@@ -307,13 +302,6 @@ function CommitForm({ stagedCount, unstagedCount }: { stagedCount: number; unsta
 const TrashIcon = ({ small }: { small?: boolean }) => (
   <svg width={small ? 13 : 16} height={small ? 13 : 16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
     <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5" />
-  </svg>
-);
-
-const StashGlyph = () => (
-  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-    <path d="M3 11v4.5h14V11M3 11l2-5h10l2 5M3 11h4l1 2h4l1-2h4" />
-    <path d="M10 2.5V9M7.5 6.5 10 9l2.5-2.5" />
   </svg>
 );
 

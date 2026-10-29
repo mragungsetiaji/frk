@@ -51,12 +51,6 @@ export function CommitPanel() {
 
   return (
     <aside className="detail">
-      <div className="detail-bar small">
-        commit:{" "}
-        <button className="link mono" title="Copy sha" onClick={() => navigator.clipboard.writeText(detail.sha)}>
-          {detail.sha.slice(0, 7)}
-        </button>
-      </div>
       <div className="detail-head">
         <h2>{detail.subject}</h2>
         {detail.body && <pre className="body">{reflow(detail.body)}</pre>}
@@ -66,13 +60,20 @@ export function CommitPanel() {
             <div>{detail.author}</div>
             <div className="muted small">authored {formatDate(detail.authorTime)}</div>
           </div>
-          <span className="spacer" />
+        </div>
+        <div className="shas small">
+          <span>
+            <span className="muted">sha </span>
+            <button className="link mono" title="Copy the full sha" onClick={() => navigator.clipboard.writeText(detail.sha)}>
+              {detail.sha.slice(0, 7)}
+            </button>
+          </span>
           {detail.parents.length > 0 && (
-            <span className="small muted">
-              {detail.parents.length > 1 ? "parents" : "parent"}:{" "}
+            <span>
+              <span className="muted">{detail.parents.length > 1 ? "parents " : "parent "}</span>
               {detail.parents.map((p) => (
                 <button key={p} className="link mono" onClick={() => jumpTo(p)}>
-                  {p.slice(0, 7)}{" "}
+                  {p.slice(0, 7)}
                 </button>
               ))}
             </span>

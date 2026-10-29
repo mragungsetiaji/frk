@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2c33"/>
+      <stop offset="1" stop-color="#141519"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px body, 100px margin -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"/>
+  <g fill="none" stroke-linecap="round" stroke-width="44">
+    <!-- the trunk -->
+    <path d="M400 250 V780" stroke="#f2a93b"/>
+    <!-- a branch that forks off and is still open -->
+    <path d="M400 640 C400 540 624 560 624 440 V300" stroke="#3ec7b0"/>
+  </g>
+  <g stroke="#141519" stroke-width="18">
+    <circle cx="400" cy="250" r="62" fill="#f2a93b"/>
+    <circle cx="624" cy="300" r="62" fill="#3ec7b0"/>
+    <circle cx="400" cy="780" r="62" fill="#f2a93b"/>
+  </g>
+</svg>

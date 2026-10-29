@@ -1,5 +1,5 @@
 import { Row, WIP } from "../api";
-import { initials, laneColor, personColor } from "../util";
+import { initials, laneColor, personColor, SURFACE } from "../util";
 import { RowCache } from "./rowCache";
 
 export const ROW_H = 28;
@@ -19,16 +19,16 @@ export function autoGraphWidth(maxLanes: number): number {
   return GRAPH_PAD * 2 + Math.max(maxLanes, 1) * LANE_W;
 }
 
-/** Merges with no ref of their own are drawn small, as in GitKraken. */
+/** Merges with no ref of their own are drawn as small dots: they are bookkeeping, not work. */
 export function isMergeDot(row: Row): boolean {
   return row.parents.length > 1 && row.refs.length === 0;
 }
 
 /**
- * Lines turn with a rounded corner instead of curving diagonally, as in
- * GitKraken: a line leaving a node runs across at the node's row and then
- * down its lane; a line arriving runs down its lane and then across into the
- * node. Parallel lanes stay readable either way.
+ * Lines turn with a rounded corner instead of curving diagonally: a line
+ * leaving a node runs across at the node's row and then down its lane; a line
+ * arriving runs down its lane and then across into the node. Parallel lanes
+ * stay readable either way.
  */
 function segment(ctx: CanvasRenderingContext2D, s: Seg) {
   const [x1, y1, x2, y2, leaving] = s;
@@ -80,22 +80,11 @@ export function drawGraph(
     if (row) visible.push([row, i * ROW_H - scrollTop]);
   }
 
-  // Row bands: a tint from the node to the message column, and a line tying a
-  // branch label to its node. HEAD's history gets the strong version of both;
-  // everything else stays in the background.
+  // Only the selected row is tinted; lanes and nodes carry the colour.
   for (const [row, y] of visible) {
-    const x = laneX(row.lane);
-    const color = laneColor(row.color);
-    ctx.fillStyle = color + (row.sha === selected ? "48" : row.onHead ? "2a" : "0f");
-    ctx.fillRect(x, y + 1, width - x, ROW_H - 2);
-    if (row.refs.length > 0) {
-      ctx.strokeStyle = color + (row.onHead ? "c0" : "50");
-      ctx.lineWidth = row.sha === head ? 2 : 1;
-      ctx.beginPath();
-      ctx.moveTo(0, y + ROW_H / 2 + 0.5);
-      ctx.lineTo(x - NODE_R, y + ROW_H / 2 + 0.5);
-      ctx.stroke();
-    }
+    if (row.sha !== selected) continue;
+    ctx.fillStyle = "rgba(242, 169, 59, 0.13)";
+    ctx.fillRect(0, y, width, ROW_H);
   }
 
   // Batched by colour and by whether the segment is in HEAD's history.
@@ -142,7 +131,7 @@ export function drawGraph(
       // Uncommitted work: a hollow, dashed node.
       ctx.beginPath();
       ctx.arc(x, cy, NODE_R - 1, 0, Math.PI * 2);
-      ctx.fillStyle = "#1b1e24";
+      ctx.fillStyle = SURFACE;
       ctx.fill();
       ctx.setLineDash([3, 2.5]);
       ctx.lineWidth = 2;

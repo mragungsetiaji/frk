@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/icon.svg" alt="" width="96" height="96" />
+
 # frk
 
 **Every branch in one graph — and what changed since you last looked.**
@@ -130,11 +132,14 @@ like.
 
 ## Acknowledgements
 
-frk's look is inspired by [GitKraken](https://www.gitkraken.com). It stands on
-[Tauri](https://tauri.app), [React](https://react.dev),
+frk stands on [Tauri](https://tauri.app), [React](https://react.dev),
 [Prism](https://prismjs.com), [TanStack Virtual](https://tanstack.com/virtual)
 and [Zustand](https://zustand.docs.pmnd.rs).
 
 ## License
 
 No license has been chosen yet. Until one is, the code is all rights reserved.
+
+frk is an independent project. It is not affiliated with, endorsed by or
+sponsored by GitKraken, Axosoft or any other Git client vendor; product names
+belong to their owners.

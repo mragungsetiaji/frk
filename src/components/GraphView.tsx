@@ -4,8 +4,8 @@ import { RefChange, RefInfo, Row, WIP } from "../api";
 import { autoGraphWidth, drawGraph, isMergeDot, laneX, NODE_R, ROW_H } from "../graph/draw";
 import { RowCache } from "../graph/rowCache";
 import { useStore } from "../store";
-import { branchKey, laneColor, timeAgo } from "../util";
-import { CloudIcon, LaptopIcon, TagIcon } from "./Icons";
+import { branchKey, laneColor, SURFACE, timeAgo } from "../util";
+import { TagIcon } from "./Icons";
 
 const MIN_LABEL_W = 90;
 const MIN_GRAPH_W = 60;
@@ -197,7 +197,7 @@ function Header({ template, labelW, graphW }: { template: string; labelW: number
   return (
     <div className="graph-header" style={{ gridTemplateColumns: template }}>
       <span className="col">
-        Branch / tag
+        Refs
         <span
           className="col-resize"
           role="separator"
@@ -218,7 +218,7 @@ function Header({ template, labelW, graphW }: { template: string; labelW: number
           onDoubleClick={() => setColumns({ graph: null })}
         />
       </span>
-      <span className="col">Commit message</span>
+      <span className="col">Message</span>
     </div>
   );
 }
@@ -243,7 +243,7 @@ function RowCells({
   const nodeX = laneX(row.lane);
   const r = isMergeDot(row) ? 6 : NODE_R;
 
-  // GitKraken marks where the relative time changes, on the last row of each
+  // The relative time is shown where it changes, on the last row of each
   // bucket, rather than repeating a date on every row.
   const when = timeAgo(row.time);
   const showWhen = row.sha !== WIP && (isLast || (next !== undefined && timeAgo(next.time) !== when));
@@ -273,7 +273,7 @@ function RowCells({
           />
         )}
       </span>
-      <span className="message" style={{ borderLeftColor: row.onHead ? color : `${color}55` }}>
+      <span className="message">
         <span className="subject">{row.subject}</span>
         {showWhen && (
           <span className="when" title={new Date(row.time * 1000).toLocaleString()}>
@@ -362,24 +362,22 @@ function RefLabels({
         className={`chip${first.isHead ? " head" : ""}${row.onHead ? "" : " off"}`}
         style={
           first.isHead
-            ? { background: color, boxShadow: `0 0 0 2px #1b1e24, 0 0 0 3.5px ${color}, 0 0 14px ${color}aa` }
-            : { background: `color-mix(in srgb, ${color} ${row.onHead ? 40 : 22}%, #1b1e24)` }
+            ? { background: color, borderColor: color, boxShadow: `0 0 0 2px ${SURFACE}, 0 0 0 3.5px ${color}, 0 0 14px ${color}aa` }
+            : { borderColor: `${color}${row.onHead ? "aa" : "55"}` }
         }
         title={all.flatMap((l) => l.names).join("\n")}
       >
-        {first.isHead && <span className="check">✓</span>}
-        <span className="ellipsis">{first.key}</span>
+        {first.isHead ? <span className="check">✓</span> : <span className="chip-dot" style={{ background: color }} />}
         {first.kind === "tag" && <TagIcon />}
-        {first.local && <LaptopIcon />}
-        {first.remotes.length > 0 && <CloudIcon />}
+        <span className="ellipsis">{first.key}</span>
+        {/* Where the branch lives: remote names, or "local" when it exists only here. */}
+        {first.kind !== "tag" && (
+          <span className="chip-where">{first.remotes.length > 0 ? first.remotes.join(" ") : "local"}</span>
+        )}
         {first.change && <ChangeDot change={first.change} />}
       </span>
       {rest.length > 0 && (
-        <span
-          className="chip more"
-          style={{ background: `color-mix(in srgb, ${color} 34%, #1b1e24)` }}
-          title={rest.flatMap((l) => l.names).join("\n")}
-        >
+        <span className="chip more" style={{ borderColor: `${color}55` }} title={rest.flatMap((l) => l.names).join("\n")}>
           +{rest.length}
         </span>
       )}
@@ -394,10 +392,10 @@ function WipCells({ color }: { color: string }) {
     <>
       <span className="labels" />
       <span />
-      <span className="message wip-message" style={{ borderLeftColor: color }}>
-        <span className="subject">// WIP</span>
+      <span className="message wip-message" style={{ color }}>
+        <span className="subject">Uncommitted changes</span>
         <span className="wip-count small">
-          ✎ {n} file{n === 1 ? "" : "s"}
+          {n} file{n === 1 ? "" : "s"}
         </span>
       </span>
     </>

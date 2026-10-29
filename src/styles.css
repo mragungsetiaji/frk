@@ -1,11 +1,15 @@
 :root {
-  --bg: #1b1e24;
-  --bg-2: #21252d;
-  --bg-3: #2a2f39;
-  --line: #333946;
-  --text: #d9dee7;
-  --muted: #8b93a3;
-  --accent: #3fb6e8;
+  /* Neutral graphite surfaces with one warm accent. */
+  --bg: #131418;
+  --bg-2: #191a1f;
+  --bg-3: #23252b;
+  --line: #2c2f36;
+  --text: #e7e5e0;
+  --muted: #8e8f95;
+  --accent: #f2a93b;
+  --accent-ink: #1d1406;
+  --sel: rgba(242, 169, 59, 0.13);
+  --hover: rgba(255, 255, 255, 0.035);
   --add: #5cc46a;
   --del: #ef5d50;
   --warn: #f29a3c;
@@ -141,13 +145,14 @@ button:disabled {
 }
 
 .btn:hover:not(:disabled) {
-  border-color: #46506a;
+  border-color: #464a54;
 }
 
 .btn.primary {
-  background: #1f6f93;
-  border-color: #2683ad;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
 }
 
 select.btn {
@@ -464,11 +469,11 @@ body.resizing * {
 }
 
 .graph-row:hover .message {
-  background: #262b35;
+  background: var(--hover);
 }
 
 .graph-row.selected .message {
-  background: #253446;
+  background: var(--sel);
 }
 
 .graph-row > span {
@@ -496,14 +501,33 @@ body.resizing * {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   max-width: 100%;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 3px;
-  font-size: 12.5px;
-  color: #e8ecf2;
+  height: 21px;
+  padding: 0 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.chip-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.chip-where {
+  flex: none;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.chip.head .chip-where {
+  color: inherit;
+  opacity: 0.7;
 }
 
 .chip.more {
@@ -540,8 +564,8 @@ body.resizing * {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  border-left: 3px solid;
+  gap: 12px;
+  padding: 0 10px 0 14px;
 }
 
 .subject {
@@ -566,18 +590,11 @@ body.resizing * {
 }
 
 .when {
-  position: absolute;
-  right: 6px;
-  bottom: -7px;
-  z-index: 2;
-  padding: 0 6px;
-  border-radius: 3px;
-  background: #3a404c;
-  color: #c9ced8;
-  font-size: 11px;
-  line-height: 15px;
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
   white-space: nowrap;
-  pointer-events: auto;
 }
 
 .tooltip {
@@ -731,7 +748,7 @@ body.resizing * {
 }
 
 .file-item.on {
-  background: #23394a;
+  background: var(--sel);
 }
 
 .status {
@@ -823,8 +840,8 @@ body.resizing * {
 
 .ctx-item.active:not(:disabled),
 .ctx-item:hover:not(:disabled) {
-  background: #2f6f9a;
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .ctx-item:disabled {
@@ -1035,18 +1052,6 @@ body.resizing * {
 
 .fv-toolbar .segmented button:disabled {
   opacity: 0.4;
-}
-
-.ws-toggle {
-  height: 26px;
-  padding: 0 9px;
-  font-size: 14px;
-}
-
-.ws-toggle.on {
-  background: #23394a;
-  border-color: #2f6f9a;
-  color: #fff;
 }
 
 .fv-body {
@@ -1267,7 +1272,7 @@ body.resizing * {
 }
 
 .history-item.on {
-  background: #23394a;
+  background: var(--sel);
 }
 
 .history-main {
@@ -1376,13 +1381,6 @@ body.resizing * {
 }
 
 /* Commit panel */
-
-.detail-bar {
-  padding: 7px 16px;
-  border-bottom: 1px solid var(--line);
-  text-align: center;
-  color: var(--muted);
-}
 
 .files-tools {
   display: flex;
@@ -1687,20 +1685,37 @@ body.resizing * {
   font-size: 18px;
 }
 
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.tb-center {
+  gap: 8px;
+}
+
 .tool {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  min-width: 52px;
-  padding: 4px 6px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 6px;
-  color: #d0d5de;
+  color: var(--text);
+}
+
+.tool.icon-only {
+  padding: 0 8px;
 }
 
 .tool:hover:not(:disabled) {
   background: var(--bg-3);
-  color: #fff;
+  color: var(--accent);
 }
 
 .tool:disabled {
@@ -1708,7 +1723,7 @@ body.resizing * {
 }
 
 .tool-label {
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .tool-split {
@@ -1794,22 +1809,21 @@ body.resizing * {
 .wip-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
 }
 
 .wip-title {
   flex: 1;
-  text-align: center;
-  font-size: 13.5px;
+  color: var(--muted);
 }
 
 .branch-chip {
-  padding: 1px 7px;
-  border-radius: 4px;
-  background: #1f5e74;
-  color: #fff;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 .danger-btn {
@@ -1975,7 +1989,7 @@ body.resizing * {
 }
 
 .message-box:focus-within {
-  border-color: #2f6f9a;
+  border-color: var(--accent);
 }
 
 .summary-row {
@@ -2073,11 +2087,24 @@ body.resizing * {
 }
 
 .wip-message .subject {
-  font-style: italic;
-  color: #c9ced8;
+  color: inherit;
+  font-weight: 600;
 }
 
 .wip-count {
-  margin-left: 10px;
-  color: #f2c03c;
+  color: var(--muted);
+}
+
+.wip-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger-link {
+  color: #ff8d80;
+}
+
+.danger-link:disabled {
+  opacity: 0.4;
 }
