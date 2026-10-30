@@ -1,0 +1,71 @@
+name: Release
+
+# Push a tag like v0.2.0 to build every platform and attach the installers to
+# a draft release. Review the draft on GitHub, then publish it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        shell: bash
+        run: |
+          version=$(node -p 'require("./src-tauri/tauri.conf.json").version')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but tauri.conf.json says $version"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Adds the target to the toolchain pinned in rust-toolchain.toml.
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # macOS builds are signed ad hoc (bundle.macOS.signingIdentity "-"):
+      # they run, but Gatekeeper blocks them until notarized.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }}
+          tagName: ${{ github.ref_name }}
+          releaseName: frk ${{ github.ref_name }}
+          releaseDraft: true
+          releaseBody: |
+            Builds for macOS (Apple silicon and Intel) and Windows.
+
+            These builds are not notarized yet. On macOS, after dragging frk
+            into Applications, clear the download quarantine once:
+
+                xattr -dr com.apple.quarantine /Applications/frk.app
+
+            The Windows build has not been tested yet.

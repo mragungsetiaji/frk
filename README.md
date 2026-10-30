@@ -8,6 +8,9 @@
 
 A fast, lightweight desktop Git client for teams that push a lot of branches.
 
+[![CI](https://github.com/mragungsetiaji/frk/actions/workflows/ci.yml/badge.svg)](https://github.com/mragungsetiaji/frk/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mragungsetiaji/frk?include_prereleases&sort=semver)](https://github.com/mragungsetiaji/frk/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](#install)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-1.99-B7410E?logo=rust&logoColor=white)](rust-toolchain.toml)
@@ -66,8 +69,22 @@ system webview instead of bundling a browser.
 
 ## Install
 
-frk is early and not yet published as a signed download. Build it from source
-(a few minutes):
+### Download
+
+Installers for macOS (Apple silicon and Intel) and Windows are attached to each
+[release](https://github.com/mragungsetiaji/frk/releases). Open the .dmg and
+drag **frk** into Applications.
+
+Releases are not notarized yet, so macOS blocks the app the first time. Clear
+the download quarantine once:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/frk.app
+```
+
+### From source
+
+A few minutes:
 
 ```sh
 git clone https://github.com/mragungsetiaji/frk.git
@@ -78,11 +95,11 @@ make dmg            # → target/release/bundle/dmg/frk_<version>_<arch>.dmg
 
 Open the .dmg and drag **frk** into Applications, or run `make install-app` to
 copy it there directly. You need Rust, Node 22, pnpm and git; see
-[CONTRIBUTING.md](CONTRIBUTING.md#setup).
+[CONTRIBUTING.md](CONTRIBUTING.md#setup). Local builds are signed ad hoc, which
+is enough on the Mac that built them.
 
 > [!NOTE]
-> Local builds are signed ad hoc, which is enough on the Mac that built them.
-> frk targets Windows too, but it has not been built or tested there yet.
+> The Windows build is produced by CI but has not been tested yet.
 
 ## Usage
 
@@ -142,7 +159,7 @@ and [Zustand](https://zustand.docs.pmnd.rs).
 
 ## License
 
-No license has been chosen yet. Until one is, the code is all rights reserved.
+[MIT](LICENSE).
 
 frk is an independent project. It is not affiliated with, endorsed by or
 sponsored by GitKraken, Axosoft or any other Git client vendor; product names

@@ -68,8 +68,24 @@ and `BLAZE_SANDBOX=off` for proc macros. Keep `make check` as the final word.
 - Match the comments around you: they explain *why*, briefly, where the code
   cannot.
 
+## Releasing
+
+1. Bump the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and
+   `package.json`, and commit.
+2. Tag and push:
+   ```sh
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. The [release workflow](.github/workflows/release.yml) builds macOS (arm64,
+   x86_64) and Windows and attaches the installers to a **draft** release. It
+   fails early if the tag does not match `tauri.conf.json`.
+4. Check the draft on GitHub, edit the notes, publish.
+
 ## Signing builds
 
 `make dmg` signs ad hoc, which is enough to run a build on the Mac that made
-it. A .dmg for anyone else needs a Developer ID signature and notarization
-(Tauri reads the `APPLE_*` environment variables), or macOS refuses to open it.
+it. Release builds are signed the same way, so macOS quarantines them after
+download. Shipping without that step needs a Developer ID signature and
+notarization: Tauri reads the `APPLE_*` environment variables, which the
+release workflow would pass in from repository secrets.
