@@ -1,5 +1,5 @@
 import { Row, WIP } from "../api";
-import { initials, laneColor, palette, personColor } from "../util";
+import { fade, initials, laneColor, palette, personColor } from "../util";
 import { RowCache } from "./rowCache";
 
 export const ROW_H = 28;
@@ -123,8 +123,8 @@ export function drawGraph(
   // Dimmed lines first, so HEAD's lines are drawn over them where they cross.
   const ordered = [...batches.values()].sort((a, b) => Number(a.head) - Number(b.head));
   for (const b of ordered) {
-    ctx.strokeStyle = laneColor(b.color) + (b.head ? "" : "59");
-    ctx.lineWidth = b.head ? 2.5 : 1.75;
+    ctx.strokeStyle = b.head ? laneColor(b.color) : fade(laneColor(b.color));
+    ctx.lineWidth = b.head ? 2.5 : 2;
     ctx.beginPath();
     for (const seg of b.segs) segment(ctx, seg);
     ctx.stroke();
@@ -137,7 +137,7 @@ export function drawGraph(
     const x = laneX(row.lane);
     const cy = y + ROW_H / 2;
     const color = laneColor(row.color);
-    ctx.globalAlpha = row.onHead || row.sha === selected ? 1 : pal.dim;
+    const faded = !row.onHead && row.sha !== selected;
     if (row.sha === head) {
       // A halo around the checked-out commit.
       ctx.beginPath();
@@ -172,7 +172,16 @@ export function drawGraph(
       ctx.fillStyle = "#fff";
       ctx.fillText(initials(row.author), x, cy + 0.5);
     }
-    ctx.globalAlpha = 1;
+    if (faded) {
+      // Cover the node with the background at partial opacity: the result is
+      // opaque, so the lane line behind it stays hidden.
+      ctx.beginPath();
+      ctx.arc(x, cy, (isMergeDot(row) ? MERGE_R : NODE_R + 1.5), 0, Math.PI * 2);
+      ctx.globalAlpha = pal.dim;
+      ctx.fillStyle = pal.surface;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     if (row.sha === selected) {
       ctx.beginPath();
       ctx.arc(x, cy, (isMergeDot(row) ? MERGE_R : NODE_R) + 3, 0, Math.PI * 2);

@@ -8,8 +8,8 @@ const PALETTES = {
     surface: "#131418",
     selection: "rgba(242, 169, 59, 0.13)",
     ring: "#ffffff",
-    /** Opacity of nodes outside HEAD's history. */
-    dim: 0.45,
+    /** How far lines and nodes outside HEAD's history fade into the background. */
+    dim: 0.55,
     lanes: [
       "#f2a93b",
       "#3ec7b0",
@@ -29,7 +29,7 @@ const PALETTES = {
     surface: "#f4f2ed",
     selection: "rgba(184, 112, 26, 0.12)",
     ring: "#34363b",
-    dim: 0.6,
+    dim: 0.5,
     lanes: [
       "#c27a1a",
       "#1d9480",
@@ -54,6 +54,18 @@ export function palette() {
 export function laneColor(i: number): string {
   const lanes = palette().lanes;
   return lanes[i % lanes.length];
+}
+
+/**
+ * `hex` moved a fraction `t` of the way to the background, as an opaque
+ * colour: faded lines stay crisp and nothing shows through faded nodes, which
+ * a lower opacity would give neither.
+ */
+export function fade(hex: string, t = palette().dim): string {
+  const bg = palette().surface;
+  const c = (s: string, i: number) => parseInt(s.slice(1 + i * 2, 3 + i * 2), 16);
+  const ch = (i: number) => Math.round(c(hex, i) + (c(bg, i) - c(hex, i)) * t);
+  return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
 }
 
 export function timeAgo(unixSeconds: number, now = Date.now()): string {
